@@ -52,7 +52,17 @@ public class InMemoryLocalJobs
 
 	public void stop()
 	{
-		queueThread.interrupt();
+		try 
+		{
+			queueThread.interrupt();
+			queueThread.join();
+		}
+		catch(InterruptedException e)
+		{
+			// Ignore this interruption
+			Thread.currentThread().interrupt();
+		}
+
 		executor.shutdown();
 	}
 	
@@ -64,7 +74,6 @@ public class InMemoryLocalJobs
 			try
 			{
 				SubmittedJobImpl submittedJob  = queue.take();
-				
 				executor.submit(() -> {
 					JobRunner runner = getRunner(submittedJob.data);
 					if(runner == null)
