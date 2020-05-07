@@ -52,6 +52,7 @@ public class InMemoryLocalJobs
 
 	public void stop()
 	{
+		queueThread.interrupt();
 		executor.shutdown();
 	}
 	
