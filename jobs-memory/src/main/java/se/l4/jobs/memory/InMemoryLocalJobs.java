@@ -13,7 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import se.l4.jobs.AbstractLocalJobs;
-import se.l4.jobs.Job;
+import se.l4.jobs.JobEncounter;
 import se.l4.jobs.JobBuilder;
 import se.l4.jobs.JobRunner;
 import se.l4.jobs.Jobs;
@@ -193,7 +193,7 @@ public class InMemoryLocalJobs
 	}
 
 	private class JobImpl<T>
-		implements Job<T>
+		implements JobEncounter<T>
 	{
 		private final SubmittedJobImpl submitted;
 

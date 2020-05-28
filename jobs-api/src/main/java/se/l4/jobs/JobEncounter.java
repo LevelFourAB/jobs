@@ -5,7 +5,7 @@ package se.l4.jobs;
  *
  * @param <T>
  */
-public interface Job<T>
+public interface JobEncounter<T>
 {
 	/**
 	 * Get the data of the job.
