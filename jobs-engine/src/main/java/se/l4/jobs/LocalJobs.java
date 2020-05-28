@@ -3,8 +3,6 @@ package se.l4.jobs;
 /**
  * Extension of {@link Jobs} that allows {@link JobRunner}s to be registered.
  * 
- * @author Andreas Holstenson
- *
  */
 public interface LocalJobs
 	extends Jobs

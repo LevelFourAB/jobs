@@ -8,9 +8,6 @@ import com.google.common.collect.Maps;
 
 /**
  * Abstract implementation of {@link LocalJobs} that helps with runner registration.
- * 
- * @author Andreas Holstenson
- *
  */
 public abstract class AbstractLocalJobs
 	implements LocalJobs
