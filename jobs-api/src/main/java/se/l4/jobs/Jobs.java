@@ -4,13 +4,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 
-import se.l4.commons.serialization.Named;
-import se.l4.commons.serialization.SerializerCollection;
-
 /**
- * Jobs interface, for submitting and scheduling jobs. Jobs are represented
- * by their data, that must be a {@link SerializerCollection serializable} class
- * that has been {@link Named given a name}.
+ * Jobs interface, for submitting and scheduling jobs.
  */
 public interface Jobs
 {
@@ -20,7 +15,7 @@ public interface Jobs
 	 * @param jobData
 	 * @return
 	 */
-	JobBuilder add(Object jobData);
+	JobBuilder add(JobData jobData);
 
 	/**
 	 * Marker for running a job as soon as possible.

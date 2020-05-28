@@ -13,8 +13,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import se.l4.jobs.AbstractLocalJobs;
-import se.l4.jobs.JobEncounter;
 import se.l4.jobs.JobBuilder;
+import se.l4.jobs.JobData;
+import se.l4.jobs.JobData;
+import se.l4.jobs.JobEncounter;
 import se.l4.jobs.JobRunner;
 import se.l4.jobs.Jobs;
 import se.l4.jobs.LocalJobs;
@@ -100,7 +102,7 @@ public class InMemoryLocalJobs
 	}
 
 	@Override
-	public JobBuilder add(Object jobData)
+	public JobBuilder add(JobData jobData)
 	{
 		Objects.requireNonNull(jobData, "Job data must be supplied");
 
