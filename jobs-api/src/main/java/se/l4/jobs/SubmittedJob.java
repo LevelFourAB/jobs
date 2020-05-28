@@ -5,9 +5,6 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Information about a submitted job.
- * 
- * @author Andreas Holstenson
- *
  */
 public interface SubmittedJob<T>
 {

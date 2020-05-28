@@ -7,7 +7,7 @@ public class JobException
 	{
 		super(msg);
 	}
-	
+
 	public JobException(String msg, Throwable cause)
 	{
 		super(msg, cause);

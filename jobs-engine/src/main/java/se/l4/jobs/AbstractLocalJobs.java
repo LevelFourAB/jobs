@@ -13,18 +13,18 @@ public abstract class AbstractLocalJobs
 	implements LocalJobs
 {
 	private final Map<Class<?>, JobRunner<?>> runners;
-	
+
 	public AbstractLocalJobs()
 	{
 		runners = Maps.newHashMap();
 	}
-	
+
 	@Override
 	public void registerRunner(JobRunner<?> runner)
 	{
 		registerRunner((Class) getDataType(runner.getClass()), runner);
 	}
-	
+
 	private Class<?> getDataType(Class<?> type)
 	{
 		Type[] genericInterfaces = type.getGenericInterfaces();
@@ -40,10 +40,10 @@ public abstract class AbstractLocalJobs
 				}
 			}
 		}
-		
+
 		throw new RuntimeException("Could not find data type for " + type);
 	}
-	
+
 	private Class<?> findClass(Type type)
 	{
 		if(type instanceof Class)
@@ -54,10 +54,10 @@ public abstract class AbstractLocalJobs
 		{
 			return (Class) ((ParameterizedType) type).getRawType();
 		}
-		
+
 		throw new RuntimeException("Could not determine type for " + type);
 	}
-	
+
 	@Override
 	public <T> void registerRunner(Class<T> dataType, JobRunner<T> runner)
 	{
@@ -65,10 +65,10 @@ public abstract class AbstractLocalJobs
 		{
 			throw new IllegalArgumentException(dataType + " is already registered to " + runners.get(dataType));
 		}
-		
+
 		runners.put(dataType, runner);
 	}
-	
+
 	protected JobRunner<?> getRunner(Object data)
 	{
 		Class<?> type = data.getClass();
@@ -76,16 +76,16 @@ public abstract class AbstractLocalJobs
 		{
 			JobRunner<?> runner = runners.get(type);
 			if(runner != null) return runner;
-			
+
 			runner = getRunnerFromInterface(type);
 			if(runner != null) return runner;
-			
+
 			type = type.getSuperclass();
 		}
-		
+
 		return null;
 	}
-	
+
 	private JobRunner<?> getRunnerFromInterface(Class<?> type)
 	{
 		Class<?>[] interfaces = type.getInterfaces();
@@ -94,13 +94,13 @@ public abstract class AbstractLocalJobs
 			JobRunner<?> runner = runners.get(intf);
 			if(runner != null) return runner;
 		}
-		
+
 		for(Class<?> intf : interfaces)
 		{
 			JobRunner<?> runner = getRunnerFromInterface(intf);
 			if(runner != null) return runner;
 		}
-		
+
 		return null;
 	}
 }

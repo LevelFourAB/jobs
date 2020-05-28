@@ -23,21 +23,18 @@ import se.l4.jobs.SubmittedJob;
 /**
  * Implementation of {@link LocalJobs} that keeps everything in memory. Instances
  * of this type needs to be {@link #start() started} and can be {@link #stop() stopped}.
- * 
- * @author Andreas Holstenson
- *
  */
 public class InMemoryLocalJobs
 	extends AbstractLocalJobs
 {
 	private static final int MAX_ATTEMPTS = 5;
 	private static final Logger logger = LoggerFactory.getLogger(InMemoryLocalJobs.class);
-	
+
 	private final DelayQueue<SubmittedJobImpl> queue;
-	
+
 	private ThreadPoolExecutor executor;
 	private Thread queueThread;
-	
+
 	public InMemoryLocalJobs()
 	{
 		queue = new DelayQueue<>();
@@ -52,7 +49,7 @@ public class InMemoryLocalJobs
 
 	public void stop()
 	{
-		try 
+		try
 		{
 			queueThread.interrupt();
 			queueThread.join();
@@ -65,7 +62,7 @@ public class InMemoryLocalJobs
 
 		executor.shutdown();
 	}
-	
+
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	private void queueJobs()
 	{
@@ -81,12 +78,12 @@ public class InMemoryLocalJobs
 						logger.warn("No job runner found for {}", submittedJob.data);
 						return;
 					}
-					
+
 					JobImpl job = new JobImpl(submittedJob);
 					try
 					{
 						runner.run(job);
-						
+
 						job.complete();
 					}
 					catch(Throwable t)
@@ -101,33 +98,33 @@ public class InMemoryLocalJobs
 			}
 		}
 	}
-	
+
 	@Override
 	public JobBuilder add(Object jobData)
 	{
 		Objects.requireNonNull(jobData, "Job data must be supplied");
-		
+
 		return new JobBuilder()
 		{
 			private When when = Jobs.now();
 			private CompletableFuture<?> future;
-			
+
 			@Override
 			public JobBuilder delay(When when)
 			{
 				Objects.requireNonNull(when, "When to run must be supplied");
-				
+
 				this.when = when;
 				return this;
 			}
-			
+
 			@Override
 			public JobBuilder withResult()
 			{
 				future = new CompletableFuture<>();
 				return this;
 			}
-			
+
 			@Override
 			public <T> SubmittedJob<T> submit()
 			{
@@ -143,18 +140,18 @@ public class InMemoryLocalJobs
 			0,
 			resultFuture
 		);
-		
+
 		queue.put(job);
-		
+
 		return job;
 	}
-	
+
 	@Override
 	public String toString()
 	{
 		return "Job Queue";
 	}
-	
+
 	private static class SubmittedJobImpl
 		implements SubmittedJob, Delayed
 	{
@@ -170,69 +167,69 @@ public class InMemoryLocalJobs
 			this.attempt = attempt;
 			this.future = future;
 		}
-		
+
 		@Override
 		public CompletableFuture result()
 		{
 			return future;
 		}
-		
+
 		@Override
 		public int compareTo(Delayed o)
 		{
 			if(o == this) return 0;
-			
+
 			return Long.compare(
 				getDelay(TimeUnit.NANOSECONDS),
 				o.getDelay(TimeUnit.NANOSECONDS)
 			);
 		}
-		
+
 		@Override
 		public long getDelay(TimeUnit unit)
 		{
 			return unit.convert(whenToRun - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
 		}
 	}
-	
+
 	private class JobImpl<T>
 		implements Job<T>
 	{
 		private final SubmittedJobImpl submitted;
-		
+
 		private boolean completed;
 		private boolean failed;
-		
+
 		public JobImpl(SubmittedJobImpl submitted)
 		{
 			this.submitted = submitted;
 		}
-		
+
 		@SuppressWarnings("unchecked")
 		@Override
 		public T getData()
 		{
 			return (T) submitted.data;
 		}
-		
+
 		@Override
 		public void complete()
 		{
 			complete(null);
 		}
-		
+
 		@Override
 		public void complete(Object result)
 		{
 			if(! this.completed) return;
-			
+
 			this.completed = true;
 			if(submitted.future != null)
 			{
 				submitted.future.complete(result);
 			}
 		}
-		
+
 		@Override
 		public void failNoRetry(Throwable t)
 		{
@@ -243,18 +240,18 @@ public class InMemoryLocalJobs
 				submitted.future.completeExceptionally(t);
 			}
 		}
-		
+
 		@Override
 		public void fail(Throwable t)
 		{
 			fail(t, 1000 * Math.max(1, ThreadLocalRandom.current().nextInt(1 << submitted.attempt)));
 		}
-		
+
 		@Override
 		public void fail(Throwable t, long retryDelay)
 		{
 			if(this.failed) return;
-			
+
 			this.failed = true;
 
 			if(submitted.attempt >= MAX_ATTEMPTS)
@@ -272,13 +269,13 @@ public class InMemoryLocalJobs
 				queue.put(new SubmittedJobImpl(submitted.data, time, submitted.attempt + 1, submitted.future));
 			}
 		}
-		
+
 		@Override
 		public int getAttempt()
 		{
 			return submitted.attempt;
 		}
-		
+
 		@Override
 		public boolean isLastTry()
 		{
