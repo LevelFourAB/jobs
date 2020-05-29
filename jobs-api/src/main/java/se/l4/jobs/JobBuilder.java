@@ -1,7 +1,10 @@
 package se.l4.jobs;
 
-import se.l4.jobs.Jobs.When;
+import java.util.concurrent.CompletableFuture;
 
+/**
+ * Builder for submitting a job.
+ */
 public interface JobBuilder
 {
 	/**
@@ -10,19 +13,12 @@ public interface JobBuilder
 	 * @param when
 	 * @return
 	 */
-	JobBuilder delay(When when);
-
-	/**
-	 * Set that the job can return a result.
-	 *
-	 * @return
-	 */
-	JobBuilder withResult();
+	JobBuilder at(When when);
 
 	/**
 	 * Submit the job.
 	 *
 	 * @return
 	 */
-	<T> SubmittedJob<T> submit();
+	<T> CompletableFuture<T> submit();
 }

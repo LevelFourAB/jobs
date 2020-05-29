@@ -1,4 +1,6 @@
-package se.l4.jobs;
+package se.l4.jobs.engine;
+
+import se.l4.jobs.JobData;
 
 /**
  * Runner of jobs of a certain type. Runners are registered via {@link LocalJobs} and
@@ -11,8 +13,8 @@ package se.l4.jobs;
  *
  * @param <In>
  */
-public interface JobRunner<In>
+public interface JobRunner<In extends JobData>
 {
-	void run(JobEncounter<In> job)
+	void run(JobEncounter<In> encounter)
 		throws Exception;
 }

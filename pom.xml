@@ -1,32 +1,33 @@
-<project 
+<project
 	xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-	
+
 	<modelVersion>4.0.0</modelVersion>
-	
+
 	<groupId>se.l4.jobs</groupId>
 	<artifactId>jobs-base</artifactId>
 	<version>0.3.1</version>
 	<packaging>pom</packaging>
 
 	<name>Job Runner</name>
-	
+
 	<url>https://github.com/LevelFourAB/jobs</url>
-	
+
 	<description>
 		Utilities for job queueing and running.
 	</description>
-	
+
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<commons-version>1.2.1</commons-version>
+		<slf4j-version>1.8.0-beta4</slf4j-version>
 	</properties>
 
 	<modules>
 		<module>jobs-api</module>
 		<module>jobs-engine</module>
-		<module>jobs-memory</module>
 	</modules>
-	
+
 	<!-- License -->
 	<licenses>
 		<license>
@@ -35,7 +36,7 @@
 			<distribution>repo</distribution>
 		</license>
 	</licenses>
-	
+
 	<!-- Managed dependencies used by several projects -->
 	<dependencyManagement>
 		<dependencies>
@@ -271,13 +272,13 @@
 			</build>
 		</profile>
 	</profiles>
-	
+
 	<scm>
 		<connection>scm:git:git@github.com:LevelFourAB/jobs.git</connection>
 		<url>git@github.com:LevelFourAB/jobs.git</url>
 		<developerConnection>scm:git:git@github.com:LevelFourAB/jobs.git</developerConnection>
 	</scm>
-	
+
 	<developers>
 		<developer>
 			<id>aholstenson</id>
