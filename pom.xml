@@ -26,6 +26,8 @@
 	<modules>
 		<module>jobs-api</module>
 		<module>jobs-engine</module>
+
+		<module>jobs-backend-silo</module>
 	</modules>
 
 	<!-- License -->
