@@ -7,7 +7,7 @@
 	<parent>
 		<artifactId>jobs-base</artifactId>
 		<groupId>se.l4.jobs</groupId>
-		<version>0.3.1</version>
+		<version>0.4.0-SNAPSHOT</version>
 		<relativePath>..</relativePath>
 	</parent>
 	
