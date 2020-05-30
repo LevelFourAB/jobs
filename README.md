@@ -14,12 +14,30 @@ jobs.add(new SendReport("example@example.org"))
 
 // Submit a job that will run later
 jobs.add(new SendReport("example@example.org"))
-  .schedule(When.after(Duration.ofMinutes(20)))
+  .withSchedule(Schedule.after(Duration.ofMinutes(20)))
   .submit();
+```
 
+## Scheduling via cron and repeating jobs
+
+One off jobs can be scheduled via a cron expression:
+
+```java
 // Submit a job that will run at 10 am
 jobs.add(new SendReport("example@example.org"))
-  .schedule(When.at("0 0 10 * * *"))
+  .withSchedule(Schedule.at("0 0 10 * * *"))
+  .submit();
+```
+
+It's also possible to schedule jobs that will repeat:
+
+```java
+// Submit a job that will run at 10 am and repeat forever
+jobs.add(new SendReport("example@example.org"))
+  .withId("report-sender")
+  .withSchedule(
+    Schedule.at("0 0 10 * * *").repeat()
+  )
   .submit();
 ```
 
