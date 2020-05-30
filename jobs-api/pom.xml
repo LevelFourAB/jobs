@@ -16,10 +16,9 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>4.13</version>
-			<scope>test</scope>
+			<groupId>se.l4.commons</groupId>
+			<artifactId>commons-serialization</artifactId>
+			<version>${commons-version}</version>
 		</dependency>
 
 		<dependency>
