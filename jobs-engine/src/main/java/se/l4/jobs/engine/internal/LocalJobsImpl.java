@@ -146,6 +146,7 @@ public class LocalJobsImpl
 		return new JobBuilder()
 		{
 			private When when = Schedule.now();
+			private Schedule schedule;
 			private String knownId;
 
 			@Override
@@ -172,12 +173,18 @@ public class LocalJobsImpl
 			{
 				Objects.requireNonNull(schedule, "schedule must be supplied");
 
-				return null;
+				this.schedule = schedule;
+				return this;
 			}
 
 			@Override
 			public Job submit()
 			{
+				if(schedule != null)
+				{
+					Objects.requireNonNull(knownId, "id must be supplied if a schedule is present");
+				}
+
 				OptionalLong timestamp = when.get();
 				if(! timestamp.isPresent())
 				{
@@ -209,6 +216,7 @@ public class LocalJobsImpl
 					knownId,
 					jobData,
 					timestamp.getAsLong(),
+					schedule,
 					1
 				);
 
@@ -419,6 +427,7 @@ public class LocalJobsImpl
 						job.getKnownId().orElse(null),
 						job.getData(),
 						timeout,
+						job.getSchedule().orElse(null),
 						job.getAttempt() + 1
 					));
 				}
@@ -426,6 +435,26 @@ public class LocalJobsImpl
 			else
 			{
 				future.complete(this.completedResult);
+
+				if(job.getSchedule().isPresent())
+				{
+					/*
+					 * If there is a schedule active ask it about the next
+					 * execution time.
+					 */
+					OptionalLong nextTime = job.getSchedule().get().getNextExecution();
+					if(nextTime.isPresent() && nextTime.getAsLong() > System.currentTimeMillis())
+					{
+						backend.accept(new QueuedJobImpl<>(
+							job.getId(),
+							job.getKnownId().orElse(null),
+							job.getData(),
+							nextTime.getAsLong(),
+							job.getSchedule().orElse(null),
+							1
+						));
+					}
+				}
 			}
 		}
 	}

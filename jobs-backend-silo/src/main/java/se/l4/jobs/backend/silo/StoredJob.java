@@ -7,6 +7,7 @@ import se.l4.commons.serialization.Expose;
 import se.l4.commons.serialization.ReflectionSerializer;
 import se.l4.commons.serialization.Use;
 import se.l4.jobs.JobData;
+import se.l4.jobs.Schedule;
 import se.l4.jobs.engine.QueuedJob;
 
 /**
@@ -30,6 +31,10 @@ public class StoredJob
 	private final long scheduledTime;
 
 	@Expose
+	@AllowAny
+	private final Schedule schedule;
+
+	@Expose
 	private final int attempt;
 
 	public StoredJob(
@@ -37,6 +42,7 @@ public class StoredJob
 		@Expose("knownId") String knownId,
 		@Expose("data") Object data,
 		@Expose("scheduledTime") long scheduledTime,
+		@Expose("schedule") Schedule schedule,
 		@Expose("attempt") int attempt
 	)
 	{
@@ -44,6 +50,7 @@ public class StoredJob
 		this.knownId = knownId;
 		this.data = data;
 		this.scheduledTime = scheduledTime;
+		this.schedule = schedule;
 		this.attempt = attempt;
 	}
 
@@ -69,6 +76,12 @@ public class StoredJob
 	public long getScheduledTime()
 	{
 		return scheduledTime;
+	}
+
+	@Override
+	public Optional<Schedule> getSchedule()
+	{
+		return Optional.ofNullable(schedule);
 	}
 
 	@Override

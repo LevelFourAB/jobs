@@ -3,6 +3,7 @@ package se.l4.jobs.engine;
 import java.util.Optional;
 
 import se.l4.jobs.JobData;
+import se.l4.jobs.Schedule;
 
 /**
  * Information about job that has been queued up to be run.
@@ -40,6 +41,13 @@ public interface QueuedJob<D extends JobData>
 	 *   time in milliseconds from the epoch
 	 */
 	long getScheduledTime();
+
+	/**
+	 * Get the schedule for when this job runs.
+	 *
+	 * @return
+	 */
+	Optional<Schedule> getSchedule();
 
 	/**
 	 * Get the number of attempts to run this job has been made.

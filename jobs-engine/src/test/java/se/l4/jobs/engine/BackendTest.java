@@ -106,7 +106,7 @@ public abstract class BackendTest
 	{
 		CompletableFuture<String> future = jobs.add(new TestData("a", 1))
 			.id("knownId")
-			.schedule(Schedule.after(Duration.ofMillis(500)))
+			.schedule(Schedule.after(Duration.ofMillis(700)))
 			.submit()
 			.result();
 
@@ -124,7 +124,6 @@ public abstract class BackendTest
 		String value = future.join();
 		MatcherAssert.assertThat(value, is("a"));
 	}
-
 
 	@Test
 	public void test6()
@@ -147,5 +146,21 @@ public abstract class BackendTest
 		{
 			MatcherAssert.assertThat(e.getCause(), instanceOf(JobCancelledException.class));
 		}
+	}
+
+	@Test
+	public void test7()
+		throws Exception
+	{
+		Job job = jobs.add(new TestData("a", 1))
+			.id("knownId")
+			.schedule(Schedule.after(Duration.ofMillis(10)).repeat())
+			.submit();
+
+		// First result
+		job.result().join();
+
+		// Second result
+		job.result().join();
 	}
 }

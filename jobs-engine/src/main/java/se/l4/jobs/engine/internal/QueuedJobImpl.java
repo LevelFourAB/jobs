@@ -3,6 +3,7 @@ package se.l4.jobs.engine.internal;
 import java.util.Optional;
 
 import se.l4.jobs.JobData;
+import se.l4.jobs.Schedule;
 import se.l4.jobs.engine.QueuedJob;
 
 /**
@@ -17,6 +18,7 @@ public class QueuedJobImpl<T extends JobData>
 	private final String knownId;
 	private final T data;
 	private final long scheduledTime;
+	private final Schedule schedule;
 	private final int attempt;
 
 	public QueuedJobImpl(
@@ -24,6 +26,7 @@ public class QueuedJobImpl<T extends JobData>
 		String knownId,
 		T data,
 		long scheduledTime,
+		Schedule schedule,
 		int attempt
 	)
 	{
@@ -31,6 +34,7 @@ public class QueuedJobImpl<T extends JobData>
 		this.knownId = knownId;
 		this.data = data;
 		this.scheduledTime = scheduledTime;
+		this.schedule = schedule;
 		this.attempt = attempt;
 	}
 
@@ -56,6 +60,12 @@ public class QueuedJobImpl<T extends JobData>
 	public long getScheduledTime()
 	{
 		return scheduledTime;
+	}
+
+	@Override
+	public Optional<Schedule> getSchedule()
+	{
+		return Optional.ofNullable(schedule);
 	}
 
 	@Override
