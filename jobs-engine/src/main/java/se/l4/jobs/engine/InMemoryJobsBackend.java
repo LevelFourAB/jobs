@@ -1,5 +1,6 @@
 package se.l4.jobs.engine;
 
+import java.util.Optional;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.TimeUnit;
@@ -57,6 +58,20 @@ public class InMemoryJobsBackend
 	public void accept(QueuedJob<?> job)
 	{
 		queue.add(new DelayedJob(job));
+	}
+
+	@Override
+	public Optional<QueuedJob<?>> getViaId(String id)
+	{
+		for(DelayedJob q : queue)
+		{
+			if(q.job.getKnownId().isPresent() && id.equals(q.job.getKnownId().get()))
+			{
+				return Optional.of(q.job);
+			}
+		}
+
+		return Optional.empty();
 	}
 
 	private void queueJobs(JobControl control)

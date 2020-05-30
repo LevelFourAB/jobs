@@ -11,17 +11,20 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import se.l4.commons.types.matching.ClassMatchingHashMap;
+import se.l4.jobs.Job;
 import se.l4.jobs.JobBuilder;
 import se.l4.jobs.JobData;
 import se.l4.jobs.JobException;
+import se.l4.jobs.Schedule;
 import se.l4.jobs.When;
 import se.l4.jobs.engine.Delay;
 import se.l4.jobs.engine.JobControl;
@@ -42,7 +45,7 @@ public class LocalJobsImpl
 	private final int maxAutomaticAttempts;
 	private final ClassMatchingHashMap<JobData, JobRunner<?>> runners;
 
-	private final Cache<Long, CompletableFuture<Object>> futures;
+	private final LoadingCache<Long, CompletableFuture<Object>> futures;
 
 	private ThreadPoolExecutor executor;
 
@@ -59,7 +62,15 @@ public class LocalJobsImpl
 
 		this.futures = CacheBuilder.newBuilder()
 			.weakValues()
-			.build();
+			.build(new CacheLoader<Long, CompletableFuture<Object>>()
+			{
+				@Override
+				public CompletableFuture<Object> load(Long key)
+					throws Exception
+				{
+					return new CompletableFuture<>();
+				}
+			});
 	}
 
 	@Override
@@ -115,13 +126,32 @@ public class LocalJobsImpl
 	}
 
 	@Override
+	public Optional<Job> getViaId(String id)
+	{
+		Objects.requireNonNull(id, "id must not be null");
+		return backend.getViaId(id)
+			.map(this::resolveJob);
+	}
+
+	@Override
 	public JobBuilder add(JobData jobData)
 	{
 		Objects.requireNonNull(jobData, "jobData must be supplied");
 
 		return new JobBuilder()
 		{
-			private When when = When.now();
+			private When when = Schedule.now();
+			private String knownId;
+
+			@Override
+			public JobBuilder id(String id)
+			{
+				Objects.requireNonNull(id, "id must not be null");
+
+				this.knownId = id;
+
+				return this;
+			}
 
 			@Override
 			public JobBuilder schedule(When when)
@@ -133,32 +163,67 @@ public class LocalJobsImpl
 			}
 
 			@Override
-			@SuppressWarnings({ "unchecked", "rawtypes" })
-			public <T> CompletableFuture<T> submit()
+			public JobBuilder schedule(Schedule schedule)
+			{
+				Objects.requireNonNull(schedule, "schedule must be supplied");
+
+				return null;
+			}
+
+			@Override
+			public Job submit()
 			{
 				OptionalLong timestamp = when.get();
 				if(! timestamp.isPresent())
 				{
-					CompletableFuture<T> future = new CompletableFuture<>();
+					CompletableFuture<Object> future = new CompletableFuture<>();
 					future.completeExceptionally(new JobException("Job is not scheduled for execution"));
-					return future;
+					return null;
 				}
 
-				long id = backend.nextId();
+				long id;
+				if(knownId != null)
+				{
+					Optional<QueuedJob<?>> q = backend.getViaId(knownId);
+					if(q.isPresent())
+					{
+						id = q.get().getId();
+					}
+					else
+					{
+						id = backend.nextId();
+					}
+				}
+				else
+				{
+					id = backend.nextId();
+				}
 
-				backend.accept(new QueuedJobImpl<>(
+				QueuedJob<?> queuedJob = new QueuedJobImpl<>(
 					id,
+					knownId,
 					jobData,
 					timestamp.getAsLong(),
 					1
-				));
+				);
 
-				CompletableFuture<T> future = new CompletableFuture<>();
-				futures.put(id, (CompletableFuture) future);
+				Job job =  resolveJob(queuedJob);
 
-				return future;
+				/*
+				 * Ask the backend to accept the job after we've resolved
+				 * to avoid a race condition with the CompletableFuture.
+				 */
+				backend.accept(queuedJob);
+
+				return job;
 			}
 		};
+	}
+
+	private Job resolveJob(QueuedJob<?> q)
+	{
+		CompletableFuture<Object> future = futures.getUnchecked(q.getId());
+		return new JobImpl(q, future);
 	}
 
 	/**
@@ -346,6 +411,7 @@ public class LocalJobsImpl
 					// Queue it up with the new timeout
 					backend.accept(new QueuedJobImpl<>(
 						job.getId(),
+						job.getKnownId().orElse(null),
 						job.getData(),
 						timeout,
 						job.getAttempt() + 1

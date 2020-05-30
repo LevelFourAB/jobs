@@ -1,5 +1,7 @@
 package se.l4.jobs;
 
+import java.util.Optional;
+
 /**
  * Jobs interface, for submitting and scheduling jobs.
  */
@@ -12,4 +14,15 @@ public interface Jobs
 	 * @return
 	 */
 	JobBuilder add(JobData jobData);
+
+	/**
+	 * Get a job that is currently scheduled for execution via the
+	 * {@link JobBuilder#id(String) identifier} used to submit it.
+	 *
+	 * @param id
+	 *   the identifier of the job
+	 * @return
+	 *   optional containing the job, or empty optional if job is not scheduled
+	 */
+	Optional<Job> getViaId(String id);
 }

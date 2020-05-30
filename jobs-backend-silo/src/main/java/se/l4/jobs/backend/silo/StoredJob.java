@@ -1,5 +1,7 @@
 package se.l4.jobs.backend.silo;
 
+import java.util.Optional;
+
 import se.l4.commons.serialization.AllowAny;
 import se.l4.commons.serialization.Expose;
 import se.l4.commons.serialization.ReflectionSerializer;
@@ -18,6 +20,9 @@ public class StoredJob
 	private final long id;
 
 	@Expose
+	private final String knownId;
+
+	@Expose
 	@AllowAny
 	private final Object data;
 
@@ -29,12 +34,14 @@ public class StoredJob
 
 	public StoredJob(
 		@Expose("id") long id,
+		@Expose("knownId") String knownId,
 		@Expose("data") Object data,
 		@Expose("scheduledTime") long scheduledTime,
 		@Expose("attempt") int attempt
 	)
 	{
 		this.id = id;
+		this.knownId = knownId;
 		this.data = data;
 		this.scheduledTime = scheduledTime;
 		this.attempt = attempt;
@@ -46,16 +53,25 @@ public class StoredJob
 		return id;
 	}
 
+	@Override
+	public Optional<String> getKnownId()
+	{
+		return Optional.ofNullable(knownId);
+	}
+
+	@Override
 	public JobData getData()
 	{
 		return (JobData) data;
 	}
 
+	@Override
 	public long getScheduledTime()
 	{
 		return scheduledTime;
 	}
 
+	@Override
 	public int getAttempt()
 	{
 		return attempt;

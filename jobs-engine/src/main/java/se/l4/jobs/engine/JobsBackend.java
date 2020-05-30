@@ -1,5 +1,7 @@
 package se.l4.jobs.engine;
 
+import java.util.Optional;
+
 /**
  * Backend that is responsible for accepting and telling the local jobs
  * instance to run certain jobs.
@@ -34,4 +36,14 @@ public interface JobsBackend
 	 * @param job
 	 */
 	void accept(QueuedJob<?> job);
+
+	/**
+	 * Get a job using the {@link QueuedJob#getKnownId()}.
+	 *
+	 * @param id
+	 *   the known id of the job, never {@code null}
+	 * @return
+	 *   optional containing the job if found, or empty optional if not found
+	 */
+	Optional<QueuedJob<?>> getViaId(String id);
 }

@@ -12,7 +12,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import se.l4.jobs.When;
+import se.l4.jobs.Schedule;
 
 /**
  * Abstract base class for tests that a backend should pass.
@@ -52,7 +52,8 @@ public abstract class BackendTest
 	public void test1()
 	{
 		CompletableFuture<String> future = jobs.add(new TestData("a", 1))
-			.submit();
+			.submit()
+			.result();
 
 		String value = future.join();
 		MatcherAssert.assertThat(value, is("a"));
@@ -62,7 +63,8 @@ public abstract class BackendTest
 	public void test2()
 	{
 		CompletableFuture<String> future = jobs.add(new TestData("a", 2))
-			.submit();
+			.submit()
+			.result();
 
 		String value = future.join();
 		MatcherAssert.assertThat(value, is("a"));
@@ -72,8 +74,47 @@ public abstract class BackendTest
 	public void test3()
 	{
 		CompletableFuture<String> future = jobs.add(new TestData("a", 2))
-			.schedule(When.after(Duration.ofSeconds(1)))
-			.submit();
+			.schedule(Schedule.after(Duration.ofSeconds(1)))
+			.submit()
+			.result();
+
+		String value = future.join();
+		MatcherAssert.assertThat(value, is("a"));
+	}
+
+	@Test
+	public void test4()
+	{
+		CompletableFuture<String> future = jobs.add(new TestData("a", 1))
+			.id("knownId")
+			.schedule(Schedule.after(Duration.ofMillis(500)))
+			.submit()
+			.result();
+
+		String value = future.join();
+		MatcherAssert.assertThat(value, is("a"));
+	}
+
+	@Test
+	public void test5()
+		throws Exception
+	{
+		CompletableFuture<String> future = jobs.add(new TestData("a", 1))
+			.id("knownId")
+			.schedule(Schedule.after(Duration.ofMillis(500)))
+			.submit()
+			.result();
+
+		// Replace the invocation with a new one
+		jobs.add(new TestData("a", 1))
+			.id("knownId")
+			.schedule(Schedule.after(Duration.ofMillis(1000)))
+			.submit()
+			.result();
+
+		// After the original 500 ms we should not be done
+		Thread.sleep(500);
+		MatcherAssert.assertThat(future.isDone(), is(false));
 
 		String value = future.join();
 		MatcherAssert.assertThat(value, is("a"));

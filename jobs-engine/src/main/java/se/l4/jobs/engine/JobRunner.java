@@ -1,5 +1,8 @@
 package se.l4.jobs.engine;
 
+import java.util.Optional;
+import java.util.OptionalInt;
+
 import se.l4.jobs.JobData;
 
 /**
@@ -47,4 +50,14 @@ public interface JobRunner<In extends JobData>
 	 */
 	void run(JobEncounter<In> encounter)
 		throws Exception;
+
+	default Optional<Delay> getDelay()
+	{
+		return Optional.empty();
+	}
+
+	default OptionalInt getMaxAttempts()
+	{
+		return OptionalInt.empty();
+	}
 }

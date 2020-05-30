@@ -1,12 +1,19 @@
 package se.l4.jobs;
 
-import java.util.concurrent.CompletableFuture;
-
 /**
  * Builder for submitting a job.
  */
 public interface JobBuilder
 {
+	/**
+	 * Set the identifier of this job. This is required when using a
+	 * {@link #schedule(Schedule)} that is repeatable.
+	 *
+	 * @param id
+	 * @return
+	 */
+	JobBuilder id(String id);
+
 	/**
 	 * Set when the job should be run.
 	 *
@@ -16,9 +23,17 @@ public interface JobBuilder
 	JobBuilder schedule(When when);
 
 	/**
+	 * Set when the job should be run.
+	 *
+	 * @param schedule
+	 * @return
+	 */
+	JobBuilder schedule(Schedule schedule);
+
+	/**
 	 * Submit the job.
 	 *
 	 * @return
 	 */
-	<T> CompletableFuture<T> submit();
+	Job submit();
 }

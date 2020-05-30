@@ -1,5 +1,7 @@
 package se.l4.jobs.engine;
 
+import java.util.Optional;
+
 import se.l4.jobs.JobData;
 
 /**
@@ -10,11 +12,18 @@ import se.l4.jobs.JobData;
 public interface QueuedJob<D extends JobData>
 {
 	/**
-	 * Get the identifier of the job.
+	 * Get the automatically generated identifier of the job.
 	 *
 	 * @return
 	 */
 	long getId();
+
+	/**
+	 * Get the known identifier for this job.
+	 *
+	 * @return
+	 */
+	Optional<String> getKnownId();
 
 	/**
 	 * Get the data of the job.

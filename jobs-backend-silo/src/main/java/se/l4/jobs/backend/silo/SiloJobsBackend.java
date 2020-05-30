@@ -100,7 +100,7 @@ public class SiloJobsBackend
 			}
 
 			StoredJob job = first.get();
-			scheduleRun(job.getScheduledTime());
+			scheduleRun(job.getScheduledTime(), true);
 		}
 	}
 
@@ -123,6 +123,7 @@ public class SiloJobsBackend
 	{
 		StoredJob storedJob = new StoredJob(
 			job.getId(),
+			job.getKnownId().orElse(null),
 			job.getData(),
 			job.getScheduledTime(),
 			job.getAttempt()
@@ -130,7 +131,19 @@ public class SiloJobsBackend
 
 		entity.store(storedJob);
 
-		scheduleRun(job.getScheduledTime());
+		scheduleRun(job.getScheduledTime(), false);
+	}
+
+	@Override
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public Optional<QueuedJob<?>> getViaId(String id)
+	{
+		try(FetchResult<StoredJob> fr = entity.query("viaKnownId", IndexQuery.type())
+			.field("knownId").isEqualTo(id)
+			.run())
+		{
+			return Optional.ofNullable(fr.first().orElse(null));
+		}
 	}
 
 	/**
@@ -138,12 +151,12 @@ public class SiloJobsBackend
 	 *
 	 * @param timestamp
 	 */
-	private void scheduleRun(long timestamp)
+	private void scheduleRun(long timestamp, boolean ignoreClosest)
 	{
 		timestampLock.lock();
 		try
 		{
-			if(future != null && closestTimestamp < timestamp)
+			if(future != null && ! ignoreClosest && closestTimestamp < timestamp)
 			{
 				return;
 			}
@@ -182,7 +195,7 @@ public class SiloJobsBackend
 				if(job.getScheduledTime() > System.currentTimeMillis())
 				{
 					// This should not be run now, schedule another run for later
-					scheduleRun(job.getScheduledTime());
+					scheduleRun(job.getScheduledTime(), true);
 					return;
 				}
 				else
@@ -243,8 +256,12 @@ public class SiloJobsBackend
 	{
 		return builder
 			.defineField("timestamp", "long")
+			.defineField("knownId", "string")
 			.add("sortedByTime", Index::queryEngine)
 				.addSortField("timestamp")
+				.done()
+			.add("viaKnownId", Index::queryEngine)
+				.addField("knownId")
 				.done();
 	}
 
