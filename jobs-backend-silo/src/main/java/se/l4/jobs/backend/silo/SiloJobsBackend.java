@@ -244,7 +244,6 @@ public class SiloJobsBackend
 		return builder
 			.defineField("timestamp", "long")
 			.add("sortedByTime", Index::queryEngine)
-				.addField("timestamp")
 				.addSortField("timestamp")
 				.done();
 	}

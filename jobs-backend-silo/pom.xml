@@ -32,5 +32,14 @@
 		    <artifactId>slf4j-api</artifactId>
 		    <version>${slf4j-version}</version>
 		</dependency>
+
+		<!-- For easier testing -->
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>jobs-engine</artifactId>
+			<version>${project.version}</version>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 </project>
