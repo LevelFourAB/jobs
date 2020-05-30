@@ -13,19 +13,19 @@ public class QueuedJobImpl<T extends JobData>
 {
 	private final long id;
 	private final T data;
-	private final long timestamp;
+	private final long scheduledTime;
 	private final int attempt;
 
 	public QueuedJobImpl(
 		long id,
 		T data,
-		long timestamp,
+		long scheduledTime,
 		int attempt
 	)
 	{
 		this.id = id;
 		this.data = data;
-		this.timestamp = timestamp;
+		this.scheduledTime = scheduledTime;
 		this.attempt = attempt;
 	}
 
@@ -42,9 +42,9 @@ public class QueuedJobImpl<T extends JobData>
 	}
 
 	@Override
-	public long getTimestamp()
+	public long getScheduledTime()
 	{
-		return timestamp;
+		return scheduledTime;
 	}
 
 	@Override

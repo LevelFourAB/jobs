@@ -22,7 +22,7 @@ public class StoredJob
 	private final Object data;
 
 	@Expose
-	private final long timestamp;
+	private final long scheduledTime;
 
 	@Expose
 	private final int attempt;
@@ -30,13 +30,13 @@ public class StoredJob
 	public StoredJob(
 		@Expose("id") long id,
 		@Expose("data") Object data,
-		@Expose("timestamp") long timestamp,
+		@Expose("scheduledTime") long scheduledTime,
 		@Expose("attempt") int attempt
 	)
 	{
 		this.id = id;
 		this.data = data;
-		this.timestamp = timestamp;
+		this.scheduledTime = scheduledTime;
 		this.attempt = attempt;
 	}
 
@@ -51,9 +51,9 @@ public class StoredJob
 		return (JobData) data;
 	}
 
-	public long getTimestamp()
+	public long getScheduledTime()
 	{
-		return timestamp;
+		return scheduledTime;
 	}
 
 	public int getAttempt()

@@ -118,7 +118,7 @@ public class InMemoryJobsBackend
 		@Override
 		public long getDelay(TimeUnit unit)
 		{
-			return unit.convert(job.getTimestamp() - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
+			return unit.convert(job.getScheduledTime() - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
 		}
 	}
 }

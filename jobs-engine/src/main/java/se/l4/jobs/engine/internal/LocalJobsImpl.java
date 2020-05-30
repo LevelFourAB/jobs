@@ -124,7 +124,7 @@ public class LocalJobsImpl
 			private When when = When.now();
 
 			@Override
-			public JobBuilder at(When when)
+			public JobBuilder schedule(When when)
 			{
 				Objects.requireNonNull(when, "when must be supplied");
 
@@ -136,7 +136,7 @@ public class LocalJobsImpl
 			@SuppressWarnings({ "unchecked", "rawtypes" })
 			public <T> CompletableFuture<T> submit()
 			{
-				OptionalLong timestamp = when.getTimestamp();
+				OptionalLong timestamp = when.get();
 				if(! timestamp.isPresent())
 				{
 					CompletableFuture<T> future = new CompletableFuture<>();
@@ -289,7 +289,7 @@ public class LocalJobsImpl
 		@Override
 		public void fail(Throwable t, When when)
 		{
-			OptionalLong timestamp = when.getTimestamp();
+			OptionalLong timestamp = when.get();
 			if(timestamp.isPresent())
 			{
 				failAndRetryAt(t, timestamp.getAsLong());

@@ -13,7 +13,7 @@ public interface JobBuilder
 	 * @param when
 	 * @return
 	 */
-	JobBuilder at(When when);
+	JobBuilder schedule(When when);
 
 	/**
 	 * Submit the job.

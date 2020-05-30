@@ -36,7 +36,7 @@ import se.l4.silo.structured.StructuredEntity;
  *
  * <p>
  * This works by queuing up a task for the closest job. When the tasks runs
- * all of the jobs that have past their {@link QueuedJob#getTimestamp() timestamp}
+ * all of the jobs that have past their {@link QueuedJob#getScheduledTime() timestamp}
  * will be run. After this is done the task will be queued up again.
  */
 public class SiloJobsBackend
@@ -100,7 +100,7 @@ public class SiloJobsBackend
 			}
 
 			StoredJob job = first.get();
-			scheduleRun(job.getTimestamp());
+			scheduleRun(job.getScheduledTime());
 		}
 	}
 
@@ -124,13 +124,13 @@ public class SiloJobsBackend
 		StoredJob storedJob = new StoredJob(
 			job.getId(),
 			job.getData(),
-			job.getTimestamp(),
+			job.getScheduledTime(),
 			job.getAttempt()
 		);
 
 		entity.store(storedJob);
 
-		scheduleRun(job.getTimestamp());
+		scheduleRun(job.getScheduledTime());
 	}
 
 	/**
@@ -179,10 +179,10 @@ public class SiloJobsBackend
 					return;
 				}
 
-				if(job.getTimestamp() > System.currentTimeMillis())
+				if(job.getScheduledTime() > System.currentTimeMillis())
 				{
 					// This should not be run now, schedule another run for later
-					scheduleRun(job.getTimestamp());
+					scheduleRun(job.getScheduledTime());
 					return;
 				}
 				else

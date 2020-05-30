@@ -24,13 +24,13 @@ public interface QueuedJob<D extends JobData>
 	D getData();
 
 	/**
-	 * Get the UNIX time that this instance represents. If this is -1, this
-	 * represent <i>the current time</i>.
+	 * Get the time in milliseconds from the epoch for when this job should be
+	 * run.
 	 *
 	 * @return
-	 *   timestamp in UNIX time
+	 *   time in milliseconds from the epoch
 	 */
-	long getTimestamp();
+	long getScheduledTime();
 
 	/**
 	 * Get the number of attempts to run this job has been made.

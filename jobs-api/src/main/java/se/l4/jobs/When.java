@@ -17,12 +17,12 @@ import se.l4.jobs.internal.JobsCron;
 public interface When
 {
 	/**
-	 * Get the UNIX time that this instance represents. If this is
-	 * -1, this represent <i>the current time</i>.
+	 * Get the time in milliseconds from the epoch that this instance
+	 * represents.
 	 *
 	 * @return
 	 */
-	OptionalLong getTimestamp();
+	OptionalLong get();
 
 	/**
 	 * Marker for running a job as soon as possible.

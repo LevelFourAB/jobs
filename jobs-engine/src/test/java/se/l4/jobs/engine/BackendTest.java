@@ -72,7 +72,7 @@ public abstract class BackendTest
 	public void test3()
 	{
 		CompletableFuture<String> future = jobs.add(new TestData("a", 2))
-			.at(When.after(Duration.ofSeconds(1)))
+			.schedule(When.after(Duration.ofSeconds(1)))
 			.submit();
 
 		String value = future.join();
