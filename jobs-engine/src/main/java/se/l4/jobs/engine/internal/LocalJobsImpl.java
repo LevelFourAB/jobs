@@ -1,5 +1,6 @@
 package se.l4.jobs.engine.internal;
 
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -245,7 +246,7 @@ public class LocalJobsImpl
 		@Override
 		public void failNoRetry(Throwable t)
 		{
-			fail(t, -1);
+			failAndRetryAt(t, -1);
 		}
 
 		@Override
@@ -259,16 +260,34 @@ public class LocalJobsImpl
 		{
 			Objects.requireNonNull(delay, "delay can not be null");
 
-			fail(t, delay.getDelay(getAttempt()));
+			failAndRetryIn(t, delay.getDelay(getAttempt()));
 		}
 
 		@Override
-		public void fail(Throwable t, long retryDelay)
+		public void fail(Throwable t, Duration waitTime)
+		{
+			Objects.requireNonNull(waitTime, "waitTime can not be null");
+
+			failAndRetryIn(t, waitTime.toMillis());
+		}
+
+		private void failAndRetryIn(Throwable t, long retryDelay)
+		{
+			failAndRetryAt(t, System.currentTimeMillis() + retryDelay);
+		}
+
+		@Override
+		public void fail(Throwable t, When when)
+		{
+			failAndRetryAt(t, when.getTimestamp());
+		}
+
+		private void failAndRetryAt(Throwable t, long ms)
 		{
 			if(this.failed) return;
 
 			this.failed = true;
-			this.failedRetryTime = retryDelay;
+			this.failedRetryTime = ms;
 			this.failedException = t;
 		}
 
@@ -294,9 +313,9 @@ public class LocalJobsImpl
 				}
 				else
 				{
-					long timeout = System.currentTimeMillis() + failedRetryTime;
+					long timeout = failedRetryTime;
 
-					String formattedDelay = formatDelay(failedRetryTime);
+					String formattedDelay = formatDelay(System.currentTimeMillis() - failedRetryTime);
 
 					logger.warn(
 						"Job " + job.getData() + " failed, retrying in " + formattedDelay + "; " + failedException.getMessage(),

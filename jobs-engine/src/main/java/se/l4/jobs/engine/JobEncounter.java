@@ -1,6 +1,9 @@
 package se.l4.jobs.engine;
 
+import java.time.Duration;
+
 import se.l4.jobs.JobData;
+import se.l4.jobs.When;
 
 /**
  * Representation of a job when a local worker runs it.
@@ -64,7 +67,16 @@ public interface JobEncounter<T extends JobData>
 	 * minimum time to wait before retrying it.
 	 *
 	 * @param t
-	 * @param waitTimeInMs
+	 * @param waitTime
 	 */
-	void fail(Throwable t, long waitTimeInMs);
+	void fail(Throwable t, Duration waitTime);
+
+	/**
+	 * Fail this job with the given {@link Throwable} and specify a
+	 * time when it should be retried.
+	 *
+	 * @param t
+	 * @param when
+	 */
+	void fail(Throwable t, When when);
 }
