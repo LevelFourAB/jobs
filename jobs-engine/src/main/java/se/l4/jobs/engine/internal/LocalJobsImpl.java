@@ -3,6 +3,7 @@ package se.l4.jobs.engine.internal;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -20,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import se.l4.commons.types.matching.ClassMatchingHashMap;
 import se.l4.jobs.JobBuilder;
 import se.l4.jobs.JobData;
+import se.l4.jobs.JobException;
 import se.l4.jobs.When;
 import se.l4.jobs.engine.Delay;
 import se.l4.jobs.engine.JobControl;
@@ -134,12 +136,20 @@ public class LocalJobsImpl
 			@SuppressWarnings({ "unchecked", "rawtypes" })
 			public <T> CompletableFuture<T> submit()
 			{
+				OptionalLong timestamp = when.getTimestamp();
+				if(! timestamp.isPresent())
+				{
+					CompletableFuture<T> future = new CompletableFuture<>();
+					future.completeExceptionally(new JobException("Job is not scheduled for execution"));
+					return future;
+				}
+
 				long id = backend.nextId();
 
 				backend.accept(new QueuedJobImpl<>(
 					id,
 					jobData,
-					when.getTimestamp(),
+					timestamp.getAsLong(),
 					1
 				));
 
@@ -279,7 +289,15 @@ public class LocalJobsImpl
 		@Override
 		public void fail(Throwable t, When when)
 		{
-			failAndRetryAt(t, when.getTimestamp());
+			OptionalLong timestamp = when.getTimestamp();
+			if(timestamp.isPresent())
+			{
+				failAndRetryAt(t, timestamp.getAsLong());
+			}
+			else
+			{
+				failNoRetry(t);
+			}
 		}
 
 		private void failAndRetryAt(Throwable t, long ms)
