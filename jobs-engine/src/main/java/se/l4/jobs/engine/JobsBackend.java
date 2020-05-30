@@ -38,6 +38,13 @@ public interface JobsBackend
 	void accept(QueuedJob<?> job);
 
 	/**
+	 * Cancel a job unless it is currently running.
+	 *
+	 * @param id
+	 */
+	void cancel(long id);
+
+	/**
 	 * Get a job using the {@link QueuedJob#getKnownId()}.
 	 *
 	 * @param id

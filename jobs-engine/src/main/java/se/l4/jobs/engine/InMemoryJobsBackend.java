@@ -6,6 +6,8 @@ import java.util.concurrent.Delayed;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
+import se.l4.jobs.JobCancelledException;
+
 /**
  * Backend that will keeps jobs stored in memory. This type of backend is
  * not persisted so it's useful for smaller services that might not need the
@@ -20,6 +22,8 @@ public class InMemoryJobsBackend
 	private final DelayQueue<DelayedJob> queue;
 	private Thread queueThread;
 
+	private JobControl control;
+
 	public InMemoryJobsBackend()
 	{
 		queue = new DelayQueue<>();
@@ -29,6 +33,7 @@ public class InMemoryJobsBackend
 	@Override
 	public void start(JobControl control)
 	{
+		this.control = control;
 		queueThread = new Thread(() -> queueJobs(control), "jobs-queuer");
 		queueThread.start();
 	}
@@ -58,6 +63,20 @@ public class InMemoryJobsBackend
 	public void accept(QueuedJob<?> job)
 	{
 		queue.add(new DelayedJob(job));
+	}
+
+	@Override
+	public void cancel(long id)
+	{
+		for(DelayedJob q : queue)
+		{
+			if(q.job.getId() == id)
+			{
+				queue.remove(q);
+				control.failJob(id, new JobCancelledException("Job was cancelled"));
+				return;
+			}
+		}
 	}
 
 	@Override

@@ -133,6 +133,11 @@ public class LocalJobsImpl
 			.map(this::resolveJob);
 	}
 
+	void cancel(long id)
+	{
+		backend.cancel(id);
+	}
+
 	@Override
 	public JobBuilder add(JobData jobData)
 	{
@@ -223,7 +228,7 @@ public class LocalJobsImpl
 	private Job resolveJob(QueuedJob<?> q)
 	{
 		CompletableFuture<Object> future = futures.getUnchecked(q.getId());
-		return new JobImpl(q, future);
+		return new JobImpl(this, q, future);
 	}
 
 	/**

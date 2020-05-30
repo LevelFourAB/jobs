@@ -9,14 +9,20 @@ import se.l4.jobs.engine.QueuedJob;
 public class JobImpl
 	implements Job
 {
+	private final LocalJobsImpl jobs;
+
 	private final QueuedJob<?> job;
 	private final CompletableFuture<?> result;
 
 	public JobImpl(
+		LocalJobsImpl jobs,
+
 		QueuedJob<?> job,
 		CompletableFuture<?> result
 	)
 	{
+		this.jobs = jobs;
+
 		this.job = job;
 		this.result = result;
 	}
@@ -36,7 +42,6 @@ public class JobImpl
 	@Override
 	public void cancel()
 	{
-		// TODO Auto-generated method stub
-
+		jobs.cancel(job.getId());
 	}
 }

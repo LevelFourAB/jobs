@@ -1,9 +1,12 @@
 package se.l4.jobs.engine;
 
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.fail;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 
@@ -12,6 +15,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import se.l4.jobs.Job;
+import se.l4.jobs.JobCancelledException;
 import se.l4.jobs.Schedule;
 
 /**
@@ -118,5 +123,29 @@ public abstract class BackendTest
 
 		String value = future.join();
 		MatcherAssert.assertThat(value, is("a"));
+	}
+
+
+	@Test
+	public void test6()
+		throws Exception
+	{
+		Job job = jobs.add(new TestData("a", 1))
+			.id("knownId")
+			.schedule(Schedule.after(Duration.ofMillis(500)))
+			.submit();
+
+		job.cancel();
+
+		try
+		{
+			job.result().join();
+
+			fail();
+		}
+		catch(CompletionException e)
+		{
+			MatcherAssert.assertThat(e.getCause(), instanceOf(JobCancelledException.class));
+		}
 	}
 }

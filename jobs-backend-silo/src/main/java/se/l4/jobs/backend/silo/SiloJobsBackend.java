@@ -11,6 +11,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import se.l4.commons.id.LongIdGenerator;
 import se.l4.commons.id.SimpleLongIdGenerator;
+import se.l4.jobs.JobCancelledException;
 import se.l4.jobs.engine.JobControl;
 import se.l4.jobs.engine.JobRetryException;
 import se.l4.jobs.engine.JobsBackend;
@@ -135,7 +136,13 @@ public class SiloJobsBackend
 	}
 
 	@Override
-	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public void cancel(long id)
+	{
+		entity.deleteViaId(id);
+		control.failJob(id, new JobCancelledException("Job was cancelled"));
+	}
+
+	@Override
 	public Optional<QueuedJob<?>> getViaId(String id)
 	{
 		try(FetchResult<StoredJob> fr = entity.query("viaKnownId", IndexQuery.type())
