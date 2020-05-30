@@ -150,7 +150,7 @@ public class LocalJobsImpl
 			private String knownId;
 
 			@Override
-			public JobBuilder id(String id)
+			public JobBuilder withId(String id)
 			{
 				Objects.requireNonNull(id, "id must not be null");
 
@@ -160,7 +160,7 @@ public class LocalJobsImpl
 			}
 
 			@Override
-			public JobBuilder schedule(When when)
+			public JobBuilder withSchedule(When when)
 			{
 				Objects.requireNonNull(when, "when must be supplied");
 
@@ -169,7 +169,7 @@ public class LocalJobsImpl
 			}
 
 			@Override
-			public JobBuilder schedule(Schedule schedule)
+			public JobBuilder withSchedule(Schedule schedule)
 			{
 				Objects.requireNonNull(schedule, "schedule must be supplied");
 

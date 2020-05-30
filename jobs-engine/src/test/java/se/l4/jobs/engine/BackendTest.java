@@ -79,7 +79,7 @@ public abstract class BackendTest
 	public void test3()
 	{
 		CompletableFuture<String> future = jobs.add(new TestData("a", 2))
-			.schedule(Schedule.after(Duration.ofSeconds(1)))
+			.withSchedule(Schedule.after(Duration.ofSeconds(1)))
 			.submit()
 			.result();
 
@@ -91,8 +91,8 @@ public abstract class BackendTest
 	public void test4()
 	{
 		CompletableFuture<String> future = jobs.add(new TestData("a", 1))
-			.id("knownId")
-			.schedule(Schedule.after(Duration.ofMillis(500)))
+			.withId("knownId")
+			.withSchedule(Schedule.after(Duration.ofMillis(500)))
 			.submit()
 			.result();
 
@@ -105,15 +105,15 @@ public abstract class BackendTest
 		throws Exception
 	{
 		CompletableFuture<String> future = jobs.add(new TestData("a", 1))
-			.id("knownId")
-			.schedule(Schedule.after(Duration.ofMillis(700)))
+			.withId("knownId")
+			.withSchedule(Schedule.after(Duration.ofMillis(700)))
 			.submit()
 			.result();
 
 		// Replace the invocation with a new one
 		jobs.add(new TestData("a", 1))
-			.id("knownId")
-			.schedule(Schedule.after(Duration.ofMillis(1000)))
+			.withId("knownId")
+			.withSchedule(Schedule.after(Duration.ofMillis(1000)))
 			.submit()
 			.result();
 
@@ -130,8 +130,8 @@ public abstract class BackendTest
 		throws Exception
 	{
 		Job job = jobs.add(new TestData("a", 1))
-			.id("knownId")
-			.schedule(Schedule.after(Duration.ofMillis(500)))
+			.withId("knownId")
+			.withSchedule(Schedule.after(Duration.ofMillis(500)))
 			.submit();
 
 		job.cancel();
@@ -153,8 +153,8 @@ public abstract class BackendTest
 		throws Exception
 	{
 		Job job = jobs.add(new TestData("a", 1))
-			.id("knownId")
-			.schedule(Schedule.after(Duration.ofMillis(10)).repeat())
+			.withId("knownId")
+			.withSchedule(Schedule.after(Duration.ofMillis(10)).repeat())
 			.submit();
 
 		// First result

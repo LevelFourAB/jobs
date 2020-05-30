@@ -7,12 +7,12 @@ public interface JobBuilder
 {
 	/**
 	 * Set the identifier of this job. This is required when using a
-	 * {@link #schedule(Schedule)} that is repeatable.
+	 * {@link #withSchedule(Schedule)} that is repeatable.
 	 *
 	 * @param id
 	 * @return
 	 */
-	JobBuilder id(String id);
+	JobBuilder withId(String id);
 
 	/**
 	 * Set when the job should be run.
@@ -20,7 +20,7 @@ public interface JobBuilder
 	 * @param when
 	 * @return
 	 */
-	JobBuilder schedule(When when);
+	JobBuilder withSchedule(When when);
 
 	/**
 	 * Set when the job should be run.
@@ -28,7 +28,7 @@ public interface JobBuilder
 	 * @param schedule
 	 * @return
 	 */
-	JobBuilder schedule(Schedule schedule);
+	JobBuilder withSchedule(Schedule schedule);
 
 	/**
 	 * Submit the job.

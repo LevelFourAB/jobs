@@ -17,7 +17,7 @@ public interface Jobs
 
 	/**
 	 * Get a job that is currently scheduled for execution via the
-	 * {@link JobBuilder#id(String) identifier} used to submit it.
+	 * {@link JobBuilder#withId(String) identifier} used to submit it.
 	 *
 	 * @param id
 	 *   the identifier of the job
