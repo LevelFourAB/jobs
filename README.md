@@ -31,6 +31,7 @@ import se.l4.commons.serialization.ReflectionSerializer;
 import se.l4.commons.serialization.Use;
 
 @Use(ReflectionSerializer.class)
+@Named(namespace="reports", name="send-report-job")
 public class SendReport extends JobData {
   @Expose
   private final String email;
