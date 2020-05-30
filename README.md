@@ -14,7 +14,12 @@ jobs.add(new SendReport("example@example.org"))
 
 // Submit a job that will run later
 jobs.add(new SendReport("example@example.org"))
-  .at(When.after(Duration.ofMinutes(20)))
+  .schedule(When.after(Duration.ofMinutes(20)))
+  .submit();
+
+// Submit a job that will run at 10 am
+jobs.add(new SendReport("example@example.org"))
+  .schedule(When.at("0 0 10 * * *"))
   .submit();
 ```
 
