@@ -28,6 +28,12 @@
 		</dependency>
 
 		<dependency>
+			<groupId>se.l4.vibe</groupId>
+			<artifactId>vibe-api</artifactId>
+			<version>0.3.0</version>
+		</dependency>
+
+		<dependency>
 		    <groupId>org.slf4j</groupId>
 		    <artifactId>slf4j-api</artifactId>
 		    <version>${slf4j-version}</version>

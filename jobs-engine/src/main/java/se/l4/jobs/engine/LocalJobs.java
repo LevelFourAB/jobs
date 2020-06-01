@@ -4,6 +4,7 @@ import se.l4.commons.types.TypeFinder;
 import se.l4.jobs.JobData;
 import se.l4.jobs.Jobs;
 import se.l4.jobs.engine.internal.LocalJobsBuilderImpl;
+import se.l4.vibe.Vibe;
 
 /**
  * Extension of {@link Jobs} that keeps track of available runners and executes
@@ -77,6 +78,14 @@ public interface LocalJobs
 		 *   self
 		 */
 		Builder withTypeFinder(TypeFinder finder);
+
+		/**
+		 * Start collecting metrics in the given {@link Vibe} instance.
+		 *
+		 * @param vibe
+		 * @return
+		 */
+		Builder withVibe(Vibe vibe);
 
 		/**
 		 * Add a listener to this instance. The listener will be notified

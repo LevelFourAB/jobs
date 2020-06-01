@@ -15,6 +15,7 @@ import se.l4.jobs.engine.JobRunner;
 import se.l4.jobs.engine.JobsBackend;
 import se.l4.jobs.engine.LocalJobs;
 import se.l4.jobs.engine.LocalJobs.Builder;
+import se.l4.vibe.Vibe;
 
 /**
  * Implementation of a builder for {@link LocalJobs}.
@@ -59,6 +60,13 @@ public class LocalJobsBuilderImpl
 	public Builder withTypeFinder(TypeFinder finder)
 	{
 		this.typeFinder = finder;
+		return this;
+	}
+
+	@Override
+	public Builder withVibe(Vibe vibe)
+	{
+		this.listeners.add(new VibeListener(vibe));
 		return this;
 	}
 
