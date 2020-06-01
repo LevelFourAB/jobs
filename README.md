@@ -41,6 +41,19 @@ jobs.add(new SendReport("example@example.org"))
   .submit();
 ```
 
+Scheduling another job with the same id will replace the existing job. It's 
+possible to cancel a previously submitted repeating job by fetching it and
+calling `cancel`.
+
+```java
+Optional<Job> job = jobs.getViaId("report-sender");
+
+if(job.isPresent()) {
+  // Cancel the job if it is still scheduled
+  job.get().cancel();
+}
+```
+
 ## Job data and runners
 
 In this library jobs are represented by data classes that have a job runner
@@ -110,4 +123,58 @@ public run(JobEncounter<Data> encounter) {
     }
   }
 }
+```
+
+## Automatic discovery of job runners
+
+Job runners can be discovered automatically using a `TypeFinder`:
+
+```java
+// The type finder used to locate job runners
+TypeFinder typeFinder = TypeFinder.builder()
+  .addPackage("com.example.package")
+  .setInstanceFactory(instanceFactory)
+  .build();
+
+// Pass the type finder to the builder to automatically find runners
+LocalJobs.builder()
+  .withBackend(backend)
+  .withTypeFinder(typeFinder)
+  .build();
+```
+
+## Backends
+
+### Memory based
+
+`InMemoryJobsBackend` is a backend included within the module `jobs-engine`.
+It provides a queue that is kept entirely in memory without any persistance,
+meaning that any jobs submitted will be lost if the backend is stopped or the
+process is restarted.
+
+There is also a risk that this type of backend will run of out memory if too
+many jobs are submitted.
+
+### Persisted using Silo
+
+`SiloJobsBackend` is available in the module `jobs-backend-silo` and will
+persist jobs using a [Silo instance](https://github.com/levelfourab/silo).
+This type of backend is useful for single-process systems that want to store
+jobs between restarts.
+
+For this backend an entity needs to be defined on the `SiloBuilder` when 
+creating the `LocalSilo` instance:
+
+```java
+SiloBuilder builder = LocalSilo.open(pathToStorage);
+
+SiloJobsBackend.defineJobEntity(builder, "jobs:queue");
+
+Silo silo = builder.build();
+```
+
+This entity should then be passed to the backend:
+
+```java
+new SiloJobsBackend(silo.structured("jobs:queue"));
 ```
