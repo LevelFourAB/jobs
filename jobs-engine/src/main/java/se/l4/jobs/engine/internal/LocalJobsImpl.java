@@ -29,6 +29,7 @@ import se.l4.jobs.When;
 import se.l4.jobs.engine.Delay;
 import se.l4.jobs.engine.JobControl;
 import se.l4.jobs.engine.JobEncounter;
+import se.l4.jobs.engine.JobListener;
 import se.l4.jobs.engine.JobRetryException;
 import se.l4.jobs.engine.JobRunner;
 import se.l4.jobs.engine.JobsBackend;
@@ -46,17 +47,20 @@ public class LocalJobsImpl
 	private final ClassMatchingHashMap<JobData, JobRunner<?>> runners;
 
 	private final LoadingCache<Long, CompletableFuture<Object>> futures;
+	private final JobListener[] listeners;
 
 	private ThreadPoolExecutor executor;
 
 	public LocalJobsImpl(
 		JobsBackend backend,
 		Delay defaultDelay,
+		JobListener[] listeners,
 		ClassMatchingHashMap<JobData, JobRunner<?>> runners
 	)
 	{
 		this.backend = backend;
 		this.defaultDelay = defaultDelay;
+		this.listeners = listeners;
 		this.runners = runners;
 		this.maxAutomaticAttempts = 5;
 
@@ -228,6 +232,12 @@ public class LocalJobsImpl
 				 */
 				backend.accept(queuedJob);
 
+				// Trigger the listeners
+				for(JobListener listener : listeners)
+				{
+					listener.jobScheduled(job);
+				}
+
 				return job;
 			}
 		};
@@ -245,7 +255,6 @@ public class LocalJobsImpl
 	 * @param job
 	 * @return
 	 */
-	@SuppressWarnings({ "unchecked", "rawtypes" })
 	private CompletionStage<Object> executeJob(QueuedJob<? extends JobData> job)
 	{
 		CompletableFuture<Object> result = new CompletableFuture<>();
@@ -260,10 +269,11 @@ public class LocalJobsImpl
 				return;
 			}
 
-			JobEncounterImpl encounter = new JobEncounterImpl<>(job);
+			JobEncounterImpl<?> encounter = new JobEncounterImpl<>(job);
+
 			try
 			{
-				runner.get().run(encounter);
+				encounter.executeOn(runner.get());
 
 				if(! encounter.failed && ! encounter.completed)
 				{
@@ -296,7 +306,8 @@ public class LocalJobsImpl
 	private class JobEncounterImpl<T extends JobData>
 		implements JobEncounter<T>
 	{
-		private final QueuedJob<T> job;
+		private final QueuedJob<T> scheduledJob;
+		private final Job job;
 
 		private boolean completed;
 		private Object completedResult;
@@ -307,13 +318,34 @@ public class LocalJobsImpl
 
 		public JobEncounterImpl(QueuedJob<T> job)
 		{
-			this.job = job;
+			this.scheduledJob = job;
+			this.job = resolveJob(job);
+		}
+
+		@SuppressWarnings({ "unchecked", "rawtypes" })
+		public void executeOn(JobRunner<?> jobRunner)
+			throws Exception
+		{
+			// Trigger the listeners
+			for(JobListener listener : listeners)
+			{
+				try
+				{
+					listener.jobStarted(job);
+				}
+				catch(Throwable t)
+				{
+					logger.warn("Calling " + listener + " for job start errored", t);
+				}
+			}
+
+			((JobRunner) jobRunner).run((JobEncounter) this);
 		}
 
 		@Override
 		public T getData()
 		{
-			return (T) job.getData();
+			return (T) scheduledJob.getData();
 		}
 
 		@Override
@@ -390,7 +422,7 @@ public class LocalJobsImpl
 		@Override
 		public int getAttempt()
 		{
-			return job.getAttempt();
+			return scheduledJob.getAttempt();
 		}
 
 		public void finish(CompletableFuture<Object> future)
@@ -400,9 +432,25 @@ public class LocalJobsImpl
 				if(failedRetryTime < 0)
 				{
 					logger.warn(
-						"Job " + job.getData() + " failed, giving up without retrying; " + failedException.getMessage(),
+						"Job " + scheduledJob.getData() + " failed, giving up without retrying; " + failedException.getMessage(),
 						failedException
 					);
+
+					/*
+					 * Trigger the listeners to indicate that this is a
+					 * permanent failure.
+					 */
+					for(JobListener listener : listeners)
+					{
+						try
+						{
+							listener.jobFailed(job, false);
+						}
+						catch(Throwable t)
+						{
+							logger.warn("Calling " + listener + " for failed job errored", t);
+						}
+					}
 
 					// Fail the call
 					future.completeExceptionally(failedException);
@@ -414,43 +462,74 @@ public class LocalJobsImpl
 					String formattedDelay = formatDelay(System.currentTimeMillis() - failedRetryTime);
 
 					logger.warn(
-						"Job " + job.getData() + " failed, retrying in " + formattedDelay + "; " + failedException.getMessage(),
+						"Job " + scheduledJob.getData() + " failed, retrying in " + formattedDelay + "; " + failedException.getMessage(),
 						failedException
 					);
+
+					/*
+					 * Trigger the listeners to indicate that this is a
+					 * temporary failure.
+					 */
+					for(JobListener listener : listeners)
+					{
+						try
+						{
+							listener.jobFailed(job, true);
+						}
+						catch(Throwable t)
+						{
+							logger.warn("Calling " + listener + " for failed job errored", t);
+						}
+					}
 
 					// Indicate that this has failed - but that it will be retried
 					future.completeExceptionally(new JobRetryException("Job failed, retry in " + formattedDelay, failedException));
 
 					// Queue it up with the new timeout
 					backend.accept(new QueuedJobImpl<>(
-						job.getId(),
-						job.getKnownId().orElse(null),
-						job.getData(),
+						scheduledJob.getId(),
+						scheduledJob.getKnownId().orElse(null),
+						scheduledJob.getData(),
 						timeout,
-						job.getSchedule().orElse(null),
-						job.getAttempt() + 1
+						scheduledJob.getSchedule().orElse(null),
+						scheduledJob.getAttempt() + 1
 					));
 				}
 			}
 			else
 			{
+				logger.info("Job " + scheduledJob.getData() + " completed");
+
+				// Trigger the listeners to indicate job completion
+				for(JobListener listener : listeners)
+				{
+					try
+					{
+						listener.jobCompleted(job);
+					}
+					catch(Throwable t)
+					{
+						logger.warn("Calling " + listener + " for completed job errored", t);
+					}
+				}
+
 				future.complete(this.completedResult);
 
-				if(job.getSchedule().isPresent())
+				if(scheduledJob.getSchedule().isPresent())
 				{
 					/*
 					 * If there is a schedule active ask it about the next
 					 * execution time.
 					 */
-					OptionalLong nextTime = job.getSchedule().get().getNextExecution();
+					OptionalLong nextTime = scheduledJob.getSchedule().get().getNextExecution();
 					if(nextTime.isPresent() && nextTime.getAsLong() > System.currentTimeMillis())
 					{
 						backend.accept(new QueuedJobImpl<>(
-							job.getId(),
-							job.getKnownId().orElse(null),
-							job.getData(),
+							scheduledJob.getId(),
+							scheduledJob.getKnownId().orElse(null),
+							scheduledJob.getData(),
 							nextTime.getAsLong(),
-							job.getSchedule().orElse(null),
+							scheduledJob.getSchedule().orElse(null),
 							1
 						));
 					}

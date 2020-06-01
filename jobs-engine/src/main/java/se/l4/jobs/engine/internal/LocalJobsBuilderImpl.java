@@ -1,5 +1,7 @@
 package se.l4.jobs.engine.internal;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 import se.l4.commons.types.TypeFinder;
@@ -8,6 +10,7 @@ import se.l4.commons.types.matching.ClassMatchingHashMap;
 import se.l4.jobs.JobData;
 import se.l4.jobs.JobException;
 import se.l4.jobs.engine.Delay;
+import se.l4.jobs.engine.JobListener;
 import se.l4.jobs.engine.JobRunner;
 import se.l4.jobs.engine.JobsBackend;
 import se.l4.jobs.engine.LocalJobs;
@@ -21,12 +24,15 @@ public class LocalJobsBuilderImpl
 {
 	private final ClassMatchingHashMap<JobData, JobRunner<?>> runners;
 
+	private final List<JobListener> listeners;
+
 	private JobsBackend backend;
 	private TypeFinder typeFinder;
 	private Delay defaultDelay;
 
 	public LocalJobsBuilderImpl()
 	{
+		listeners = new ArrayList<>();
 		runners = new ClassMatchingHashMap<>();
 		defaultDelay = Delay.exponential(1000);
 	}
@@ -53,6 +59,13 @@ public class LocalJobsBuilderImpl
 	public Builder withTypeFinder(TypeFinder finder)
 	{
 		this.typeFinder = finder;
+		return this;
+	}
+
+	@Override
+	public Builder addListener(JobListener listener)
+	{
+		this.listeners.add(listener);
 		return this;
 	}
 
@@ -88,6 +101,7 @@ public class LocalJobsBuilderImpl
 		return new LocalJobsImpl(
 			backend,
 			defaultDelay,
+			listeners.toArray(new JobListener[listeners.size()]),
 			runners
 		);
 	}

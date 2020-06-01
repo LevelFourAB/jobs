@@ -79,6 +79,16 @@ public interface LocalJobs
 		Builder withTypeFinder(TypeFinder finder);
 
 		/**
+		 * Add a listener to this instance. The listener will be notified
+		 * then jobs are scheduled, completed or failed on the instance.
+		 *
+		 * @param listener
+		 *   listener that should be notified
+		 * @return
+		 */
+		Builder addListener(JobListener listener);
+
+		/**
 		 * Add a runner of jobs. The type of the data will be determined from
 		 * the implemented {@link JobRunner} interface.
 		 *
