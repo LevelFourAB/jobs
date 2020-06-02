@@ -46,7 +46,7 @@ possible to cancel a previously submitted repeating job by fetching it and
 calling `cancel`.
 
 ```java
-Optional<Job> job = jobs.getViaId("report-sender");
+Optional<Job<?, ?>> job = jobs.getViaId("report-sender");
 
 if(job.isPresent()) {
   // Cancel the job if it is still scheduled
@@ -68,7 +68,7 @@ import se.l4.commons.serialization.Use;
 
 @Use(ReflectionSerializer.class)
 @Named(namespace="reports", name="send-report-job")
-public class SendReport extends JobData {
+public class SendReport extends JobData<Void> {
   @Expose
   private final String email;
 
@@ -85,8 +85,8 @@ public class SendReport extends JobData {
 Such a class then has a runner associated with it:
 
 ```java
-public class SendReportRunner implements JobRunner<SendReport> {
-  public void run(JobEncounter<SendReport> encounter) {
+public class SendReportRunner implements JobRunner<SendReport, Void> {
+  public void run(JobEncounter<SendReport, Void> encounter) {
     // Code that performs the job goes here    
   }
 }
@@ -95,34 +95,118 @@ public class SendReportRunner implements JobRunner<SendReport> {
 Runners are registered when `LocalJobs` are built either manually by calling
 `addRunner` or using a `TypeFinder` for automatic registration.
 
-## Job control
+## Returning results from jobs
+
+To return a result from a job set the type a job will return in it's data
+class:
+
+```java
+public class JobDataWithResult implements JobData<String> {
+  ...
+}
+```
+
+A runner can then use `complete` in `JobEncounter` to send back a result:
+
+```java
+public class JobDataWithResultRunner implements JobRunner<JobDataWithResult, String> {
+  public run(JobEncounter<JobDataWithResult, String> encounter) {
+    String result = ...;
+      
+    // Indicate that the job has completed
+    encounter.complete(result);
+  }
+}
+```
+
+When submitting this job you can listen for the result:
+
+```java
+// Submit the job
+Job<JobDataWithResult, String> job = jobs.add(new JobDataWithResult(...))
+  .submit();
+
+/* 
+ * Job.result can be used to retrieve a future that will resolve when the
+ * job completes or fails completely.
+ */
+CompletableFuture<String> future = job.result();
+
+// Use any method on the future, such as join to wait for the result
+String result = future.join();
+```
+
+## Managing failures and retries
 
 In many cases it's important to have control over how a job is retried if it
-fails or if you want to deliver a result.
+fails. The default behavior is to retry a job up to 5 times, delaying the
+run with 1 second for the first retry and then doubling the time.
+
+Control over this behavior is done via the methods `fail` and `failNoRetry`:
 
 ```java
 /* 
  * Delay for 1 minute after first attempt and then double at each failed
- * attempt. Also cap the delay at one day.
+ * attempt.
  */
-Delay customDelay = Delay.max(Delay.exponential(Duration.ofMinutes(1)), Duration.ofDays(1));
+private final Delay customDelay = Delay.exponential(Duration.ofMinutes(1));
 
-public run(JobEncounter<Data> encounter) {
+public run(JobEncounter<Data, Void> encounter) {
   try {
-    // Do something for the job here
-    
+    // Perform the job here
+  
     // Indicate that the job has completed
-    encounter.complete(result);
+    encounter.complete();
   } catch(Throwable t) {
-    if(encounter.getAttempt() >= 5) {
-      // This is the fifth attempt - lets skip retrying it at this point
+    if(encounter.getAttempt() >= 10) {
+      /*
+       * This is the tenth attempt - lets skip retrying it at this point.
+       * The next delay would be 512 minutes (~8.5 hours) and this attempt was
+       * delayed by 256 minutes (~4.2 hours) from the previous attempt.
+       */
       encounter.failNoRetry(t);
     } else {
-      // Fail with the custom delay
+      // Fail and retry this job later, delaying the run by customDelay
       encounter.fail(t, customDelay);
     }
   }
 }
+```
+
+`Delay` supports combining as well, such as limiting clamping to a maximum 
+value, applying a jitter or limiting the number of attempts:
+
+```java
+/*
+ * Clamp to a maximum delay - when otherDelay starts to return values longer
+ * than a day this will return one day forever.
+ */
+Delay clamped = Delay.clampMax(otherDelay, Duration.ofDays(1));
+
+/*
+ * Apply a random jitter to spread out retries a bit.
+ */
+Delay jittered = Delay.jitter(otherDelay);
+Delay jittered = Delay.jitter(otherDelay, Duration.ofSeconds(1));
+
+/*
+ * Limit the number of attempts of a job (alternative to getAttempt() >= N).
+ */
+Delay limited = Delay.limitAttempts(otherDelay, 10);
+```
+
+It's also possible to take full control and use a specific sequence of delays,
+this delay will use the specified durations between retries and then give up
+after the sixth attempt of the job:
+
+```java
+Delay sequence = Delay.sequence(
+	Duration.ofMinutes(1), // first retry 1 minute after first failure
+	Duration.ofMinutes(10), // second retry 10 minutes after second failure
+	Duration.ofMinutes(30), // third retry 30 minutes after third failure
+	Duration.ofMinutes(60), // fourth retry 60 minutes after fourth failure,
+	Duration.ofMinutes(120), // fifth retry 30 minutes after fifth failure
+);
 ```
 
 ## Automatic discovery of job runners
