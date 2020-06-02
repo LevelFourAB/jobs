@@ -8,6 +8,8 @@ import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -45,6 +47,11 @@ public class LocalJobsImpl
 	private final JobsBackend backend;
 	private final Delay defaultDelay;
 	private final int maxAutomaticAttempts;
+
+	private final int minThreads;
+	private final int maxThreads;
+	private final int queueSize;
+
 	private final ClassMatchingHashMap<JobData<?>, JobRunner<?, ?>> runners;
 
 	private final LoadingCache<Long, CompletableFuture<Object>> futures;
@@ -56,12 +63,20 @@ public class LocalJobsImpl
 		JobsBackend backend,
 		Delay defaultDelay,
 		JobListener[] listeners,
+		int minThreads,
+		int maxThreads,
+		int queueSize,
 		ClassMatchingHashMap<JobData<?>, JobRunner<?, ?>> runners
 	)
 	{
 		this.backend = backend;
 		this.defaultDelay = defaultDelay;
 		this.listeners = listeners;
+
+		this.minThreads = minThreads;
+		this.maxThreads = maxThreads;
+		this.queueSize = queueSize;
+
 		this.runners = runners;
 		this.maxAutomaticAttempts = 5;
 
@@ -86,10 +101,31 @@ public class LocalJobsImpl
 			.build();
 
 		executor = new ThreadPoolExecutor(
-			8, 8,
+			minThreads, maxThreads,
 			5l, TimeUnit.MINUTES,
-			new LinkedBlockingQueue<Runnable>(),
-			factory
+			new LinkedBlockingQueue<Runnable>(queueSize),
+			factory,
+			new RejectedExecutionHandler()
+			{
+				@Override
+				public void rejectedExecution(Runnable r, ThreadPoolExecutor executor)
+				{
+					if(executor.isShutdown())
+					{
+						throw new RejectedExecutionException();
+					}
+
+					try
+					{
+						executor.getQueue().put(r);
+					}
+					catch(InterruptedException e)
+					{
+						Thread.currentThread().interrupt();
+						throw new RejectedExecutionException();
+					}
+				}
+			}
 		);
 
 		backend.start(new JobControl()

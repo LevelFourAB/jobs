@@ -33,11 +33,18 @@ public class LocalJobsBuilderImpl
 	private TypeFinder typeFinder;
 	private Delay defaultDelay;
 
+	private int minThreads;
+	private int maxThreads;
+	private int queueSize;
+
 	public LocalJobsBuilderImpl()
 	{
 		listeners = new ArrayList<>();
 		runners = new ClassMatchingHashMap<>();
 		defaultDelay = Delay.exponential(1000);
+
+		minThreads = 1;
+		maxThreads = Runtime.getRuntime().availableProcessors() * 2;
 	}
 
 	@Override
@@ -83,6 +90,32 @@ public class LocalJobsBuilderImpl
 	}
 
 	@Override
+	public Builder withExecutorThreads(int minThreads, int maxThreads)
+	{
+		if(minThreads < 1) throw new IllegalArgumentException("minThreads can not be smaller than 1");
+		if(maxThreads < minThreads) throw new IllegalArgumentException("maxThreads can not be smaller than minThreads");
+
+		this.minThreads = minThreads;
+		this.maxThreads = maxThreads;
+		return this;
+	}
+
+	@Override
+	public Builder withExecutorThreads(int threads)
+	{
+		return withExecutorThreads(1, threads);
+	}
+
+	@Override
+	public Builder withExecutorQueueSize(int queueSize)
+	{
+		if(queueSize < 0) throw new IllegalArgumentException("queueSize must be more or equal to 0");
+
+		this.queueSize = queueSize;
+		return this;
+	}
+
+	@Override
 	public Builder addListener(JobListener listener)
 	{
 		this.listeners.add(listener);
@@ -123,6 +156,9 @@ public class LocalJobsBuilderImpl
 			backend,
 			defaultDelay,
 			listeners.toArray(new JobListener[listeners.size()]),
+			minThreads,
+			maxThreads,
+			queueSize == 0 ? maxThreads : queueSize,
 			runners
 		);
 	}

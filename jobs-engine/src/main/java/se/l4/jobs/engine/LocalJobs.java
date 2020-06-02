@@ -1,5 +1,7 @@
 package se.l4.jobs.engine;
 
+import java.util.concurrent.ThreadPoolExecutor;
+
 import se.l4.commons.types.TypeFinder;
 import se.l4.jobs.JobData;
 import se.l4.jobs.Jobs;
@@ -89,6 +91,51 @@ public interface LocalJobs
 		 * @return
 		 */
 		Builder withVibe(Vibe vibe, String... path);
+
+		/**
+		 * Set the maximum number of threads to use for executing jobs. This
+		 * will allow the {@link ThreadPoolExecutor} used for running jobs to
+		 * keep between 1 and the given number of threads around.
+		 *
+		 * <p>
+		 * If this or {@link #withExecutorThreads(int, int)} isn't used this
+		 * will default to the number on cores of the current machine times 2.
+		 *
+		 * @param threads
+		 *   the maximum number of threads to keep around
+		 * @return
+		 */
+		Builder withExecutorThreads(int threads);
+
+		/**
+		 * Set the a minimum and maximum number of threads to use for
+		 * executing jobs.
+		 *
+		 * <p>
+		 * If this or {@link #withExecutorThreads(int)} isn't used this will
+		 * default to the number of cores on the current machine times 2.
+		 *
+		 * @param minThreads
+		 *   the minimum number of threads to keep around
+		 * @param maxThreads
+		 *   the maximum number of threads to keep around
+		 * @return
+		 */
+		Builder withExecutorThreads(int minThreads, int maxThreads);
+
+		/**
+		 * Set the number of jobs that will be kept in the queue of the
+		 * {@link ThreadPoolExecutor} used to run jobs.
+		 *
+		 * <p>
+		 * If this isn't specified it will be set to the maximum number of
+		 * threads.
+		 *
+		 * @param queueSize
+		 *   the maximum number of jobs to keep in the queue
+		 * @return
+		 */
+		Builder withExecutorQueueSize(int queueSize);
 
 		/**
 		 * Add a listener to this instance. The listener will be notified
