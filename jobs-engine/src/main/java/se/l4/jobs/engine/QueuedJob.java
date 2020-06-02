@@ -10,7 +10,7 @@ import se.l4.jobs.Schedule;
  *
  * @param <D>
  */
-public interface QueuedJob<D extends JobData>
+public interface QueuedJob<D extends JobData<R>, R>
 {
 	/**
 	 * Get the automatically generated identifier of the job.

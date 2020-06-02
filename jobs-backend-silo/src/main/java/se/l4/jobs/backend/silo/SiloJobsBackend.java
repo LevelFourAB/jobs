@@ -120,7 +120,7 @@ public class SiloJobsBackend
 	}
 
 	@Override
-	public void accept(QueuedJob<?> job)
+	public void accept(QueuedJob<?, ?> job)
 	{
 		StoredJob storedJob = new StoredJob(
 			job.getId(),
@@ -144,7 +144,7 @@ public class SiloJobsBackend
 	}
 
 	@Override
-	public Optional<QueuedJob<?>> getViaId(String id)
+	public Optional<QueuedJob<?, ?>> getViaId(String id)
 	{
 		try(FetchResult<StoredJob> fr = entity.query("viaKnownId", IndexQuery.type())
 			.field("knownId").isEqualTo(id)

@@ -35,7 +35,7 @@ public interface JobsBackend
 	 *
 	 * @param job
 	 */
-	void accept(QueuedJob<?> job);
+	void accept(QueuedJob<?, ?> job);
 
 	/**
 	 * Cancel a job unless it is currently running.
@@ -52,5 +52,5 @@ public interface JobsBackend
 	 * @return
 	 *   optional containing the job if found, or empty optional if not found
 	 */
-	Optional<QueuedJob<?>> getViaId(String id);
+	Optional<QueuedJob<?, ?>> getViaId(String id);
 }

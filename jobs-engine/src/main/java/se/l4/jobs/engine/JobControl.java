@@ -18,7 +18,7 @@ public interface JobControl
 	 * @return
 	 *   a future that will complete when the job has finished running
 	 */
-	CompletionStage<Object> runJob(QueuedJob<?> job);
+	CompletionStage<Object> runJob(QueuedJob<?, ?> job);
 
 	/**
 	 * Register that the given job has been completed.

@@ -60,7 +60,7 @@ public class InMemoryJobsBackend
 	}
 
 	@Override
-	public void accept(QueuedJob<?> job)
+	public void accept(QueuedJob<?, ?> job)
 	{
 		queue.add(new DelayedJob(job));
 	}
@@ -80,7 +80,7 @@ public class InMemoryJobsBackend
 	}
 
 	@Override
-	public Optional<QueuedJob<?>> getViaId(String id)
+	public Optional<QueuedJob<?, ?>> getViaId(String id)
 	{
 		for(DelayedJob q : queue)
 		{
@@ -131,9 +131,9 @@ public class InMemoryJobsBackend
 	private static class DelayedJob
 		implements Delayed
 	{
-		private final QueuedJob<?> job;
+		private final QueuedJob<?, ?> job;
 
-		public DelayedJob(QueuedJob<?> job)
+		public DelayedJob(QueuedJob<?, ?> job)
 		{
 			this.job = job;
 		}

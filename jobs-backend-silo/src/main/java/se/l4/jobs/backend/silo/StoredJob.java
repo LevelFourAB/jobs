@@ -15,7 +15,7 @@ import se.l4.jobs.engine.QueuedJob;
  */
 @Use(ReflectionSerializer.class)
 public class StoredJob
-	implements QueuedJob<JobData>
+	implements QueuedJob<JobData<Object>, Object>
 {
 	@Expose
 	private final long id;
@@ -67,9 +67,10 @@ public class StoredJob
 	}
 
 	@Override
-	public JobData getData()
+	@SuppressWarnings("unchecked")
+	public JobData<Object> getData()
 	{
-		return (JobData) data;
+		return (JobData<Object>) data;
 	}
 
 	@Override

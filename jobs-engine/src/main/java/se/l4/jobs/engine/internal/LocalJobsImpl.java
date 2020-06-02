@@ -94,7 +94,7 @@ public class LocalJobsImpl
 		backend.start(new JobControl()
 		{
 			@Override
-			public CompletionStage<Object> runJob(QueuedJob<?> job)
+			public CompletionStage<Object> runJob(QueuedJob<?, ?> job)
 			{
 				return executeJob(job);
 			}
@@ -201,7 +201,7 @@ public class LocalJobsImpl
 				long id;
 				if(knownId != null)
 				{
-					Optional<QueuedJob<?>> q = backend.getViaId(knownId);
+					Optional<QueuedJob<?, ?>> q = backend.getViaId(knownId);
 					if(q.isPresent())
 					{
 						id = q.get().getId();
@@ -216,7 +216,7 @@ public class LocalJobsImpl
 					id = backend.nextId();
 				}
 
-				QueuedJob<?> queuedJob = new QueuedJobImpl<>(
+				QueuedJob<?, ?> queuedJob = new QueuedJobImpl<>(
 					id,
 					knownId,
 					jobData,
@@ -244,7 +244,8 @@ public class LocalJobsImpl
 		};
 	}
 
-	private Job<?, ?> resolveJob(QueuedJob<?> q)
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	private Job<?, ?> resolveJob(QueuedJob<?, ?> q)
 	{
 		CompletableFuture<Object> future = futures.getUnchecked(q.getId());
 		return new JobImpl(this, q, future);
@@ -257,7 +258,7 @@ public class LocalJobsImpl
 	 * @return
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	private CompletionStage<Object> executeJob(QueuedJob<?> job)
+	private CompletionStage<Object> executeJob(QueuedJob<?, ?> job)
 	{
 		CompletableFuture<Object> result = new CompletableFuture<>();
 		executor.submit(() -> {
@@ -305,10 +306,10 @@ public class LocalJobsImpl
 		return result;
 	}
 
-	private class JobEncounterImpl<T extends JobData<R>, R>
-		implements JobEncounter<T, R>
+	private class JobEncounterImpl<D extends JobData<R>, R>
+		implements JobEncounter<D, R>
 	{
-		private final QueuedJob<T> scheduledJob;
+		private final QueuedJob<D, R> scheduledJob;
 		private final Job<?, ?> job;
 
 		private boolean completed;
@@ -318,7 +319,7 @@ public class LocalJobsImpl
 		private Throwable failedException;
 		private long failedRetryTime;
 
-		public JobEncounterImpl(QueuedJob<T> job)
+		public JobEncounterImpl(QueuedJob<D, R> job)
 		{
 			this.scheduledJob = job;
 			this.job = resolveJob(job);
@@ -345,9 +346,9 @@ public class LocalJobsImpl
 		}
 
 		@Override
-		public T getData()
+		public D getData()
 		{
-			return (T) scheduledJob.getData();
+			return (D) scheduledJob.getData();
 		}
 
 		@Override

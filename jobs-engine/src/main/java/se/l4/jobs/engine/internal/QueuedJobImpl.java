@@ -9,14 +9,14 @@ import se.l4.jobs.engine.QueuedJob;
 /**
  * Implementation of {@link QueuedJob}.
  *
- * @param <T>
+ * @param <D>
  */
-public class QueuedJobImpl<T extends JobData>
-	implements QueuedJob<T>
+public class QueuedJobImpl<D extends JobData<R>, R>
+	implements QueuedJob<D, R>
 {
 	private final long id;
 	private final String knownId;
-	private final T data;
+	private final D data;
 	private final long scheduledTime;
 	private final Schedule schedule;
 	private final int attempt;
@@ -24,7 +24,7 @@ public class QueuedJobImpl<T extends JobData>
 	public QueuedJobImpl(
 		long id,
 		String knownId,
-		T data,
+		D data,
 		long scheduledTime,
 		Schedule schedule,
 		int attempt
@@ -51,7 +51,7 @@ public class QueuedJobImpl<T extends JobData>
 	}
 
 	@Override
-	public T getData()
+	public D getData()
 	{
 		return data;
 	}

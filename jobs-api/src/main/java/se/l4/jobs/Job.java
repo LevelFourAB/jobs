@@ -17,6 +17,13 @@ public interface Job<D extends JobData<R>, R>
 	Optional<String> getId();
 
 	/**
+	 * Get the data of the job.
+	 *
+	 * @return
+	 */
+	D getData();
+
+	/**
 	 * Get a {@link CompletionStage} that will complete if the job either
 	 * completes successfully or fails permanently.
 	 *
