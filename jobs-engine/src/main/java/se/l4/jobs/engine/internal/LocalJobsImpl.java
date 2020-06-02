@@ -1,6 +1,7 @@
 package se.l4.jobs.engine.internal;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -350,6 +351,12 @@ public class LocalJobsImpl
 		public D getData()
 		{
 			return (D) scheduledJob.getData();
+		}
+
+		@Override
+		public Instant getFirstScheduled()
+		{
+			return Instant.ofEpochMilli(scheduledJob.getFirstScheduled());
 		}
 
 		@Override

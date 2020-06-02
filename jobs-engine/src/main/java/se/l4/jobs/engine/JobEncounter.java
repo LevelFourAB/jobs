@@ -1,6 +1,7 @@
 package se.l4.jobs.engine;
 
 import java.time.Duration;
+import java.time.Instant;
 
 import se.l4.jobs.JobData;
 import se.l4.jobs.When;
@@ -25,6 +26,26 @@ public interface JobEncounter<D extends JobData<R>, R>
 	 * @return
 	 */
 	int getAttempt();
+
+	/**
+	 * Get the instant at which this job was first scheduled to run. For
+	 * repeating jobs this is the first time the job was scheduled overall.
+	 *
+	 * <p>
+	 * This is useful for failing jobs as an alternative to looking at the
+	 * number of attempts run. Example:
+	 *
+	 * <pre>
+	 * int daysAfterFirstSchedule = ChronoUnit.DAYS.between(encounter.getFirstScheduledTime(), ZonedDateTime.now());
+	 * if(daysAfterFirstSchedule > 10) {
+	 *   // If it's been more than 10 days retrying this job give up
+	 *   encounter.failNoRetry(exception);
+	 * }
+	 * </pre>
+	 *
+	 * @return
+	 */
+	Instant getFirstScheduled();
 
 	/**
 	 * Complete this job without a result.
