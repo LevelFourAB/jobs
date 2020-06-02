@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import com.google.common.base.Joiner;
+
 import se.l4.commons.types.TypeFinder;
 import se.l4.commons.types.Types;
 import se.l4.commons.types.matching.ClassMatchingHashMap;
@@ -64,9 +66,19 @@ public class LocalJobsBuilderImpl
 	}
 
 	@Override
-	public Builder withVibe(Vibe vibe)
+	public Builder withVibe(Vibe vibe, String... path)
 	{
+		if(path.length == 0)
+		{
+			vibe = vibe.scope("jobs");
+		}
+		else
+		{
+			vibe = vibe.scope(Joiner.on('/').join(path));
+		}
+
 		this.listeners.add(new VibeListener(vibe));
+
 		return this;
 	}
 

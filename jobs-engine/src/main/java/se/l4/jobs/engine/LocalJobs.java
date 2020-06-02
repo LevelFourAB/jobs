@@ -83,9 +83,12 @@ public interface LocalJobs
 		 * Start collecting metrics in the given {@link Vibe} instance.
 		 *
 		 * @param vibe
+		 *   instance to register on
+		 * @param path
+		 *   the path to register on
 		 * @return
 		 */
-		Builder withVibe(Vibe vibe);
+		Builder withVibe(Vibe vibe, String... path);
 
 		/**
 		 * Add a listener to this instance. The listener will be notified
