@@ -1,6 +1,7 @@
 package se.l4.jobs.engine;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.OptionalLong;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -88,22 +89,26 @@ public interface Delay
 
 	/**
 	 * Create a delay that limits another {@link Delay} to a maximum value.
+	 * Once this maximum value has been reached the instance will continue
+	 * returning that value for every attempt.
 	 *
 	 * @param source
 	 * @param maxDelay
 	 */
-	static Delay max(Delay source, Duration maxDelay)
+	static Delay clampMax(Delay source, Duration maxDelay)
 	{
-		return max(source, maxDelay.toMillis());
+		return clampMax(source, maxDelay.toMillis());
 	}
 
 	/**
 	 * Create a delay that limits another {@link Delay} to a maximum value.
+	 * Once this maximum value has been reached the instance will continue
+	 * returning that value for every attempt.
 	 *
 	 * @param source
 	 * @param maxDelay
 	 */
-	static Delay max(Delay source, long maxDelay)
+	static Delay clampMax(Delay source, long maxDelay)
 	{
 		return attempt -> {
 			OptionalLong delay = source.getDelay(attempt);
@@ -155,6 +160,56 @@ public interface Delay
 			if(! delay.isPresent()) return delay;
 
 			return OptionalLong.of(delay.getAsLong() + ThreadLocalRandom.current().nextLong(maxJitter));
+		};
+	}
+
+	/**
+	 * Limit the number of attempts to do for a delay. When the number of
+	 * attempts is reached the job will no longer be retried.
+	 *
+	 * @param source
+	 *   the source of the main delay
+	 * @param maxAttempts
+	 *   the maximum number of attempts to perform
+	 * @return
+	 */
+	static Delay limitAttempts(Delay source, int maxAttempts)
+	{
+		return attempt -> {
+			if(attempt >= maxAttempts) return OptionalLong.empty();
+
+			return source.getDelay(attempt);
+		};
+	}
+
+	/**
+	 * Create a delay that returns a specific sequence. When the sequence ends
+	 * the job will no longer be retried.
+	 *
+	 * <p>
+	 * This example sequence would increase the retry time and then give up
+	 * after five retries (six runs):
+	 *
+	 * <pre>
+	 * Delay.sequence(
+	 *   Duration.ofMinutes(1), // first retry 1 minute after first failure
+	 *   Duration.ofMinutes(10), // second retry 10 minutes after second failure
+	 *   Duration.ofMinutes(30), // third retry 30 minutes after third failure
+	 *   Duration.ofMinutes(60), // fourth retry 60 minutes after fourth failure,
+	 *   Duration.ofMinutes(120), // fifth retry 30 minutes after fifth failure
+	 * );
+	 * </pre>
+	 *
+	 * @param durations
+	 * @return
+	 */
+	static Delay sequence(Duration... durations)
+	{
+		long[] d = Arrays.stream(durations).mapToLong(Duration::toMillis).toArray();
+		return attempt -> {
+			if(attempt < 1 || d.length >= attempt) return OptionalLong.empty();
+
+			return OptionalLong.of(d[attempt - 1]);
 		};
 	}
 }
