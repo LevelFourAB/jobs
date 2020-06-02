@@ -23,7 +23,7 @@ import se.l4.vibe.Vibe;
 public class LocalJobsBuilderImpl
 	implements LocalJobs.Builder
 {
-	private final ClassMatchingHashMap<JobData, JobRunner<?>> runners;
+	private final ClassMatchingHashMap<JobData<?>, JobRunner<?, ?>> runners;
 
 	private final List<JobListener> listeners;
 
@@ -78,14 +78,15 @@ public class LocalJobsBuilderImpl
 	}
 
 	@Override
-	public Builder addRunner(JobRunner<?> runner)
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public Builder addRunner(JobRunner<?, ?> runner)
 	{
-		runners.put(getType(runner), runner);
+		runners.put((Class) getType(runner), runner);
 		return this;
 	}
 
 	@Override
-	public <T extends JobData> Builder addRunner(Class<T> dataType, JobRunner<T> runner)
+	public <T extends JobData<?>> Builder addRunner(Class<T> dataType, JobRunner<T, ?> runner)
 	{
 		runners.put(dataType, runner);
 		return this;
@@ -115,7 +116,7 @@ public class LocalJobsBuilderImpl
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	private Class<? extends JobData> getType(JobRunner<?> runner)
+	private Class<? extends JobData> getType(JobRunner<?, ?> runner)
 	{
 		return (Class) Types.reference(runner.getClass())
 			.findInterface(JobRunner.class).get()

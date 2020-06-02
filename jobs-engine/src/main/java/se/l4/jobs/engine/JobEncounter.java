@@ -8,16 +8,16 @@ import se.l4.jobs.When;
 /**
  * Representation of a job when a local worker runs it.
  *
- * @param <T>
+ * @param <D>
  */
-public interface JobEncounter<T extends JobData>
+public interface JobEncounter<D extends JobData<R>, R>
 {
 	/**
 	 * Get the data of the job.
 	 *
 	 * @return
 	 */
-	T getData();
+	D getData();
 
 	/**
 	 * Get the attempt for this job.
@@ -36,7 +36,7 @@ public interface JobEncounter<T extends JobData>
 	 * Complete this job.
 	 *
 	 */
-	void complete(Object result);
+	void complete(R result);
 
 	/**
 	 * Fail this job with the given {@link Throwable} and never retry it.

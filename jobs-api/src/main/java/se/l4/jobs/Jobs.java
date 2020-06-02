@@ -13,7 +13,7 @@ public interface Jobs
 	 * @param jobData
 	 * @return
 	 */
-	JobBuilder add(JobData jobData);
+	<R, D extends JobData<R>> JobBuilder<D, R> add(D jobData);
 
 	/**
 	 * Get a job that is currently scheduled for execution via the
@@ -24,5 +24,5 @@ public interface Jobs
 	 * @return
 	 *   optional containing the job, or empty optional if job is not scheduled
 	 */
-	Optional<Job> getViaId(String id);
+	Optional<Job<?, ?>> getViaId(String id);
 }

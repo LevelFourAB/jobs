@@ -9,7 +9,7 @@ import se.l4.jobs.JobData;
 @Use(ReflectionSerializer.class)
 @Named(namespace="test", name="test-data")
 public class TestData
-	implements JobData
+	implements JobData<String>
 {
 	@Expose
 	private final String value;

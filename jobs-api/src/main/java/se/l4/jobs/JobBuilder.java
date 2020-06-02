@@ -3,7 +3,7 @@ package se.l4.jobs;
 /**
  * Builder for submitting a job.
  */
-public interface JobBuilder
+public interface JobBuilder<D extends JobData<R>, R>
 {
 	/**
 	 * Set the identifier of this job. This is required when using a
@@ -12,7 +12,7 @@ public interface JobBuilder
 	 * @param id
 	 * @return
 	 */
-	JobBuilder withId(String id);
+	JobBuilder<D, R> withId(String id);
 
 	/**
 	 * Set when the job should be run.
@@ -20,7 +20,7 @@ public interface JobBuilder
 	 * @param when
 	 * @return
 	 */
-	JobBuilder withSchedule(When when);
+	JobBuilder<D, R> withSchedule(When when);
 
 	/**
 	 * Set when the job should be run.
@@ -28,12 +28,12 @@ public interface JobBuilder
 	 * @param schedule
 	 * @return
 	 */
-	JobBuilder withSchedule(Schedule schedule);
+	JobBuilder<D, R> withSchedule(Schedule schedule);
 
 	/**
 	 * Submit the job.
 	 *
 	 * @return
 	 */
-	Job submit();
+	Job<D, R> submit();
 }

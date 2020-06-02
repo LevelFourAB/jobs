@@ -12,21 +12,21 @@ public interface JobListener
 	 *
 	 * @param job
 	 */
-	void jobScheduled(Job job);
+	void jobScheduled(Job<?, ?> job);
 
 	/**
 	 * Job has started execution.
 	 *
 	 * @param job
 	 */
-	void jobStarted(Job job);
+	void jobStarted(Job<?, ?> job);
 
 	/**
 	 * Job has been completed.
 	 *
 	 * @param job
 	 */
-	void jobCompleted(Job job);
+	void jobCompleted(Job<?, ?> job);
 
 	/**
 	 * Job failed to execute.
@@ -37,5 +37,5 @@ public interface JobListener
 	 *   if the job will be retried later, if this is {@code false} this was
 	 *   the last run of the job
 	 */
-	void jobFailed(Job job, boolean willRetry);
+	void jobFailed(Job<?, ?> job, boolean willRetry);
 }

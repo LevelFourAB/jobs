@@ -14,9 +14,9 @@ import se.l4.jobs.JobData;
  * not to do so in which case any thrown exception will fail the job and an empty result
  * will be returned on success.
  *
- * @param <In>
+ * @param <D>
  */
-public interface JobRunner<In extends JobData>
+public interface JobRunner<D extends JobData<R>, R>
 {
 	/**
 	 * Run the job described by the encounter. This will be called when the
@@ -48,7 +48,7 @@ public interface JobRunner<In extends JobData>
 	 * @param encounter
 	 * @throws Exception
 	 */
-	void run(JobEncounter<In> encounter)
+	void run(JobEncounter<D, R> encounter)
 		throws Exception;
 
 	default Optional<Delay> getDelay()

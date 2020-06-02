@@ -104,7 +104,7 @@ public interface LocalJobs
 		 * @see #addRunner(Class, JobRunner)
 		 * @param runner
 		 */
-		Builder addRunner(JobRunner<?> runner);
+		Builder addRunner(JobRunner<?, ?> runner);
 
 		/**
 		 * Add a runner of jobs. This method can be used in cases where
@@ -113,7 +113,7 @@ public interface LocalJobs
 		 * @param dataType
 		 * @param runner
 		 */
-		<T extends JobData> Builder addRunner(Class<T> dataType, JobRunner<T> runner);
+		<T extends JobData<?>> Builder addRunner(Class<T> dataType, JobRunner<T, ?> runner);
 
 		/**
 		 * Build the instance of {@link LocalJobs}.

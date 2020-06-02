@@ -44,7 +44,7 @@ public class LocalJobsImpl
 	private final JobsBackend backend;
 	private final Delay defaultDelay;
 	private final int maxAutomaticAttempts;
-	private final ClassMatchingHashMap<JobData, JobRunner<?>> runners;
+	private final ClassMatchingHashMap<JobData<?>, JobRunner<?, ?>> runners;
 
 	private final LoadingCache<Long, CompletableFuture<Object>> futures;
 	private final JobListener[] listeners;
@@ -55,7 +55,7 @@ public class LocalJobsImpl
 		JobsBackend backend,
 		Delay defaultDelay,
 		JobListener[] listeners,
-		ClassMatchingHashMap<JobData, JobRunner<?>> runners
+		ClassMatchingHashMap<JobData<?>, JobRunner<?, ?>> runners
 	)
 	{
 		this.backend = backend;
@@ -130,7 +130,7 @@ public class LocalJobsImpl
 	}
 
 	@Override
-	public Optional<Job> getViaId(String id)
+	public Optional<Job<?, ?>> getViaId(String id)
 	{
 		Objects.requireNonNull(id, "id must not be null");
 		return backend.getViaId(id)
@@ -143,7 +143,8 @@ public class LocalJobsImpl
 	}
 
 	@Override
-	public JobBuilder add(JobData jobData)
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public <R, D extends JobData<R>> JobBuilder<D, R> add(D jobData)
 	{
 		Objects.requireNonNull(jobData, "jobData must be supplied");
 
@@ -243,7 +244,7 @@ public class LocalJobsImpl
 		};
 	}
 
-	private Job resolveJob(QueuedJob<?> q)
+	private Job<?, ?> resolveJob(QueuedJob<?> q)
 	{
 		CompletableFuture<Object> future = futures.getUnchecked(q.getId());
 		return new JobImpl(this, q, future);
@@ -255,12 +256,13 @@ public class LocalJobsImpl
 	 * @param job
 	 * @return
 	 */
-	private CompletionStage<Object> executeJob(QueuedJob<? extends JobData> job)
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	private CompletionStage<Object> executeJob(QueuedJob<?> job)
 	{
 		CompletableFuture<Object> result = new CompletableFuture<>();
 		executor.submit(() -> {
-			Optional<JobRunner<?>> runner = runners.getBest(
-				job.getData().getClass()
+			Optional<JobRunner<?, ?>> runner = runners.getBest(
+				(Class) job.getData().getClass()
 			);
 
 			if(! runner.isPresent())
@@ -269,7 +271,7 @@ public class LocalJobsImpl
 				return;
 			}
 
-			JobEncounterImpl<?> encounter = new JobEncounterImpl<>(job);
+			JobEncounterImpl<?, ?> encounter = new JobEncounterImpl(job);
 
 			try
 			{
@@ -303,11 +305,11 @@ public class LocalJobsImpl
 		return result;
 	}
 
-	private class JobEncounterImpl<T extends JobData>
-		implements JobEncounter<T>
+	private class JobEncounterImpl<T extends JobData<R>, R>
+		implements JobEncounter<T, R>
 	{
 		private final QueuedJob<T> scheduledJob;
-		private final Job job;
+		private final Job<?, ?> job;
 
 		private boolean completed;
 		private Object completedResult;
@@ -323,7 +325,7 @@ public class LocalJobsImpl
 		}
 
 		@SuppressWarnings({ "unchecked", "rawtypes" })
-		public void executeOn(JobRunner<?> jobRunner)
+		public void executeOn(JobRunner<?, ?> jobRunner)
 			throws Exception
 		{
 			// Trigger the listeners

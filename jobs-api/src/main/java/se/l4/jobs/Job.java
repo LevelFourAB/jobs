@@ -7,7 +7,7 @@ import java.util.concurrent.CompletionStage;
 /**
  * Representation of a {@link Job} that has been submitted to the queue.
  */
-public interface Job
+public interface Job<D extends JobData<R>, R>
 {
 	/**
 	 * Get the optional identifier of the job.
@@ -22,7 +22,7 @@ public interface Job
 	 *
 	 * @return
 	 */
-	<T> CompletableFuture<T> result();
+	CompletableFuture<R> result();
 
 	/**
 	 * Attempt to cancel the job. This will cancel the job if it is not
