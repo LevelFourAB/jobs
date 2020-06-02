@@ -127,7 +127,15 @@ public class LocalJobsImpl
 	{
 		backend.stop();
 
-		executor.shutdown();
+		executor.shutdownNow();
+		try
+		{
+			executor.awaitTermination(1, TimeUnit.SECONDS);
+		}
+		catch(InterruptedException e)
+		{
+			Thread.currentThread().interrupt();
+		}
 	}
 
 	@Override
