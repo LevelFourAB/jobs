@@ -221,6 +221,7 @@ public class LocalJobsImpl
 					knownId,
 					jobData,
 					timestamp.getAsLong(),
+					timestamp.getAsLong(),
 					schedule,
 					1
 				);
@@ -494,6 +495,7 @@ public class LocalJobsImpl
 						scheduledJob.getId(),
 						scheduledJob.getKnownId().orElse(null),
 						scheduledJob.getData(),
+						scheduledJob.getFirstScheduled(),
 						timeout,
 						scheduledJob.getSchedule().orElse(null),
 						scheduledJob.getAttempt() + 1
@@ -532,6 +534,7 @@ public class LocalJobsImpl
 							scheduledJob.getId(),
 							scheduledJob.getKnownId().orElse(null),
 							scheduledJob.getData(),
+							scheduledJob.getFirstScheduled(),
 							nextTime.getAsLong(),
 							scheduledJob.getSchedule().orElse(null),
 							1

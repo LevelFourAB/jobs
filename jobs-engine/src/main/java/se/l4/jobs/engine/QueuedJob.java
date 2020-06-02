@@ -34,6 +34,13 @@ public interface QueuedJob<D extends JobData<R>, R>
 	D getData();
 
 	/**
+	 * Get the time at which this job was first scheduled to run.
+	 *
+	 * @return
+	 */
+	long getFirstScheduled();
+
+	/**
 	 * Get the time in milliseconds from the epoch for when this job should be
 	 * run.
 	 *

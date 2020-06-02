@@ -28,6 +28,9 @@ public class StoredJob
 	private final Object data;
 
 	@Expose
+	private final long firstScheduledTime;
+
+	@Expose
 	private final long scheduledTime;
 
 	@Expose
@@ -41,6 +44,7 @@ public class StoredJob
 		@Expose("id") long id,
 		@Expose("knownId") String knownId,
 		@Expose("data") Object data,
+		@Expose("firstScheduledTime") long firstScheduledTime,
 		@Expose("scheduledTime") long scheduledTime,
 		@Expose("schedule") Schedule schedule,
 		@Expose("attempt") int attempt
@@ -49,6 +53,7 @@ public class StoredJob
 		this.id = id;
 		this.knownId = knownId;
 		this.data = data;
+		this.firstScheduledTime = firstScheduledTime;
 		this.scheduledTime = scheduledTime;
 		this.schedule = schedule;
 		this.attempt = attempt;
@@ -71,6 +76,12 @@ public class StoredJob
 	public JobData<Object> getData()
 	{
 		return (JobData<Object>) data;
+	}
+
+	@Override
+	public long getFirstScheduled()
+	{
+		return firstScheduledTime;
 	}
 
 	@Override

@@ -126,6 +126,7 @@ public class SiloJobsBackend
 			job.getId(),
 			job.getKnownId().orElse(null),
 			job.getData(),
+			job.getFirstScheduled(),
 			job.getScheduledTime(),
 			job.getSchedule().orElse(null),
 			job.getAttempt()

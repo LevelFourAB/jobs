@@ -17,6 +17,7 @@ public class QueuedJobImpl<D extends JobData<R>, R>
 	private final long id;
 	private final String knownId;
 	private final D data;
+	private final long firstScheduledTime;
 	private final long scheduledTime;
 	private final Schedule schedule;
 	private final int attempt;
@@ -25,6 +26,7 @@ public class QueuedJobImpl<D extends JobData<R>, R>
 		long id,
 		String knownId,
 		D data,
+		long firstScheduledTime,
 		long scheduledTime,
 		Schedule schedule,
 		int attempt
@@ -33,6 +35,7 @@ public class QueuedJobImpl<D extends JobData<R>, R>
 		this.id = id;
 		this.knownId = knownId;
 		this.data = data;
+		this.firstScheduledTime = firstScheduledTime;
 		this.scheduledTime = scheduledTime;
 		this.schedule = schedule;
 		this.attempt = attempt;
@@ -54,6 +57,12 @@ public class QueuedJobImpl<D extends JobData<R>, R>
 	public D getData()
 	{
 		return data;
+	}
+
+	@Override
+	public long getFirstScheduled()
+	{
+		return firstScheduledTime;
 	}
 
 	@Override
