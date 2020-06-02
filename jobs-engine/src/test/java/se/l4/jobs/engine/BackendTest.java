@@ -5,6 +5,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.fail;
 
 import java.time.Duration;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
@@ -34,7 +35,7 @@ public abstract class BackendTest
 		return LocalJobs.builder()
 			.withBackend(createBackend())
 			.addRunner(new TestDataRunner())
-			.withDefaultDelay(attempt -> 1)
+			.withDefaultDelay(attempt -> OptionalLong.of(1))
 			.build();
 	}
 

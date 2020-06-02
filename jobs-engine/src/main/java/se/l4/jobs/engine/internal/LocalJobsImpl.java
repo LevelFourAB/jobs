@@ -382,7 +382,8 @@ public class LocalJobsImpl
 		{
 			Objects.requireNonNull(delay, "delay can not be null");
 
-			failAndRetryIn(t, delay.getDelay(getAttempt()));
+			// Get the delay and retry the job if present
+			failAndRetryIn(t, delay.getDelay(getAttempt()).orElse(-1));
 		}
 
 		@Override

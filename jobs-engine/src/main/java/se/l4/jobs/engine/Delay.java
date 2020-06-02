@@ -1,6 +1,7 @@
 package se.l4.jobs.engine;
 
 import java.time.Duration;
+import java.util.OptionalLong;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -11,7 +12,7 @@ public interface Delay
 	/**
 	 * Get the delay for the given attempt.
 	 */
-	long getDelay(int attempt);
+	OptionalLong getDelay(int attempt);
 
 	/**
 	 * Create an exponential delay based on a base in milliseconds. This will
@@ -82,7 +83,7 @@ public interface Delay
 	 */
 	static Delay exponential(long baseDelay, double multiplier)
 	{
-		return attempt -> (long) (baseDelay * Math.pow(multiplier, attempt - 1));
+		return attempt -> OptionalLong.of((long) (baseDelay * Math.pow(multiplier, attempt - 1)));
 	}
 
 	/**
@@ -104,7 +105,12 @@ public interface Delay
 	 */
 	static Delay max(Delay source, long maxDelay)
 	{
-		return attempt -> Math.min(source.getDelay(attempt), maxDelay);
+		return attempt -> {
+			OptionalLong delay = source.getDelay(attempt);
+			if(! delay.isPresent()) return delay;
+
+			return OptionalLong.of(Math.min(delay.getAsLong(), maxDelay));
+		};
 	}
 
 	/**
@@ -144,6 +150,11 @@ public interface Delay
 	 */
 	static Delay jitter(Delay source, long maxJitter)
 	{
-		return attempt -> source.getDelay(attempt) + ThreadLocalRandom.current().nextLong(maxJitter);
+		return attempt -> {
+			OptionalLong delay = source.getDelay(attempt);
+			if(! delay.isPresent()) return delay;
+
+			return OptionalLong.of(delay.getAsLong() + ThreadLocalRandom.current().nextLong(maxJitter));
+		};
 	}
 }
