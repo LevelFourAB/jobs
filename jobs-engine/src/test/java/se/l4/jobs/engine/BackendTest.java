@@ -164,4 +164,27 @@ public abstract class BackendTest
 		// Second result
 		job.result().join();
 	}
+
+	@Test
+	public void test8()
+	{
+		for(int i=0; i<50; i++) {
+			jobs.add(new TestData("a", 1))
+				.submit()
+				.result();
+		}
+
+		CompletableFuture<String> future = jobs.add(new TestData("a", 1))
+			.submit()
+			.result();
+
+		String value = future.join();
+		MatcherAssert.assertThat(value, is("a"));
+
+		/*
+		 * As this test doesn't wait for all invocations stop the jobs instance
+		 * to prevent thread leaks.
+		 */
+		jobs.stop();
+	}
 }

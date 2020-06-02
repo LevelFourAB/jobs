@@ -165,13 +165,17 @@ public class SiloJobsBackend
 		timestampLock.lock();
 		try
 		{
-			if(future != null && ! ignoreClosest && closestTimestamp < timestamp)
-			{
-				return;
-			}
-
 			if(future != null)
 			{
+				if(! ignoreClosest && timestamp > closestTimestamp)
+				{
+					/*
+					 * The given timestamp is after the next scheduled
+					 * invocation, keep the existing invocation.
+					 */
+					return;
+				}
+
 				// Cancel the current future
 				future.cancel(false);
 			}
@@ -189,52 +193,64 @@ public class SiloJobsBackend
 
 	private void runJobs(JobControl control)
 	{
-		try(FetchResult<StoredJob> fr = entity.query("sortedByTime", IndexQuery.type())
-			.field("timestamp").sort(true)
-			.run())
+		long lastHandled = 0;
+		while(true)
 		{
-			for(StoredJob job : fr)
+			try(FetchResult<StoredJob> fr = entity.query("sortedByTime", IndexQuery.type())
+				.field("timestamp").sort(true)
+				.limit(10)
+				.run())
 			{
-				if(Thread.currentThread().isInterrupted())
+				if(fr.isEmpty())
 				{
-					// The thread has been interrupted indicating we are shutting down
-					return;
+					// No more jobs in the queue, stop the processing
+					break;
 				}
 
-				if(job.getScheduledTime() > System.currentTimeMillis())
+				for(StoredJob job : fr)
 				{
-					// This should not be run now, schedule another run for later
-					scheduleRun(job.getScheduledTime(), true);
-					return;
-				}
-				else
-				{
-					// TODO: This should auto-schedule the job for later just in case
+					if(Thread.currentThread().isInterrupted())
+					{
+						// The thread has been interrupted indicating we are shutting down
+						return;
+					}
 
-					// Delete the job
-					entity.deleteViaId(job.getId());
+					if(job.getScheduledTime() > System.currentTimeMillis())
+					{
+						// This should not be run now, schedule another run for later
+						scheduleRun(job.getScheduledTime(), true);
+						return;
+					}
+					else
+					{
+						// TODO: This should auto-schedule the job for later just in case
+						lastHandled = job.getScheduledTime();
 
-					// Request the job to be run and wait for the result
-					long id = job.getId();
-					control.runJob(job)
-						.whenComplete((value, e) -> {
-							if(e == null)
-							{
-								// If not completed with an exception register as completed
-								control.completeJob(id, value);
-							}
-							else
-							{
-								if(! (e instanceof JobRetryException))
+						// Delete the job
+						entity.deleteViaId(job.getId());
+
+						// Request the job to be run and wait for the result
+						long id = job.getId();
+						control.runJob(job)
+							.whenComplete((value, e) -> {
+								if(e == null)
 								{
-									/*
-									 * For everything that isn't a retry report it
-									 * back to the control.
-									 */
-									control.failJob(id, e);
+									// If not completed with an exception register as completed
+									control.completeJob(id, value);
 								}
-							}
-						});
+								else
+								{
+									if(! (e instanceof JobRetryException))
+									{
+										/*
+										* For everything that isn't a retry report it
+										* back to the control.
+										*/
+										control.failJob(id, e);
+									}
+								}
+							});
+					}
 				}
 			}
 		}
@@ -243,7 +259,10 @@ public class SiloJobsBackend
 		timestampLock.lock();
 		try
 		{
-			future = null;
+			if(lastHandled == 0 || closestTimestamp <= lastHandled)
+			{
+				future = null;
+			}
 		}
 		finally
 		{
