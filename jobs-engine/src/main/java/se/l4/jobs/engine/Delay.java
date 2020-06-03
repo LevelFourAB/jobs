@@ -207,7 +207,7 @@ public interface Delay
 	{
 		long[] d = Arrays.stream(durations).mapToLong(Duration::toMillis).toArray();
 		return attempt -> {
-			if(attempt < 1 || d.length >= attempt) return OptionalLong.empty();
+			if(attempt < 1 || attempt >= d.length) return OptionalLong.empty();
 
 			return OptionalLong.of(d[attempt - 1]);
 		};
