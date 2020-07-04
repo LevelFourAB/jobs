@@ -17,4 +17,14 @@ public class JobException
 	{
 		super(msg, cause);
 	}
+
+	public static JobException wrap(Throwable t)
+	{
+		if(t instanceof JobException)
+		{
+			return (JobException) t;
+		}
+
+		return new JobException(t.getMessage(), t);
+	}
 }

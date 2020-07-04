@@ -3,6 +3,7 @@ package se.l4.jobs.engine;
 import java.util.Optional;
 import java.util.OptionalInt;
 
+import reactor.core.publisher.Mono;
 import se.l4.jobs.JobData;
 
 /**
@@ -48,8 +49,7 @@ public interface JobRunner<D extends JobData<R>, R>
 	 * @param encounter
 	 * @throws Exception
 	 */
-	void run(JobEncounter<D, R> encounter)
-		throws Exception;
+	Mono<R> run(JobEncounter<D, R> encounter);
 
 	default Optional<Delay> getDelay()
 	{

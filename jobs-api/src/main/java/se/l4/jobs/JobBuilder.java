@@ -1,5 +1,7 @@
 package se.l4.jobs;
 
+import reactor.core.publisher.Mono;
+
 /**
  * Builder for submitting a job.
  */
@@ -35,5 +37,5 @@ public interface JobBuilder<D extends JobData<R>, R>
 	 *
 	 * @return
 	 */
-	Job<D, R> submit();
+	Mono<Job<D, R>> submit();
 }

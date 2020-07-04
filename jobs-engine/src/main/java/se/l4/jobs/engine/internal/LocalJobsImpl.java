@@ -1,190 +1,150 @@
 package se.l4.jobs.engine.internal;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.RejectedExecutionHandler;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
+import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import reactor.core.publisher.BaseSubscriber;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
+import se.l4.commons.io.Bytes;
+import se.l4.commons.serialization.QualifiedName;
+import se.l4.commons.serialization.SerializationException;
+import se.l4.commons.serialization.Serializer;
+import se.l4.commons.serialization.SerializerCollection;
+import se.l4.commons.serialization.format.BinaryInput;
+import se.l4.commons.serialization.format.BinaryOutput;
+import se.l4.commons.serialization.format.Token;
+import se.l4.commons.serialization.standard.CompactDynamicSerializer;
 import se.l4.commons.types.matching.ClassMatchingHashMap;
 import se.l4.jobs.Job;
 import se.l4.jobs.JobBuilder;
+import se.l4.jobs.JobCancelledException;
 import se.l4.jobs.JobData;
 import se.l4.jobs.JobException;
 import se.l4.jobs.Schedule;
 import se.l4.jobs.When;
 import se.l4.jobs.engine.Delay;
-import se.l4.jobs.engine.JobControl;
 import se.l4.jobs.engine.JobEncounter;
 import se.l4.jobs.engine.JobListener;
 import se.l4.jobs.engine.JobRetryException;
 import se.l4.jobs.engine.JobRunner;
-import se.l4.jobs.engine.JobsBackend;
 import se.l4.jobs.engine.LocalJobs;
-import se.l4.jobs.engine.QueuedJob;
+import se.l4.jobs.engine.backend.BackendJobData;
+import se.l4.jobs.engine.backend.JobCancelEvent;
+import se.l4.jobs.engine.backend.JobCompleteEvent;
+import se.l4.jobs.engine.backend.JobFailureEvent;
+import se.l4.jobs.engine.backend.JobsBackend;
 
 public class LocalJobsImpl
 	implements LocalJobs
 {
 	private static final Logger logger = LoggerFactory.getLogger(LocalJobs.class);
 
-	private final JobsBackend backend;
-	private final Delay defaultDelay;
-	private final int maxAutomaticAttempts;
+	private final SerializerCollection serializers;
 
-	private final int minThreads;
-	private final int maxThreads;
-	private final int queueSize;
+	private final JobsBackend backend;
+
+	private final Delay defaultDelay;
 
 	private final ClassMatchingHashMap<JobData<?>, JobRunner<?, ?>> runners;
 
-	private final LoadingCache<Long, CompletableFuture<Object>> futures;
 	private final JobListener[] listeners;
+	private final CompactDynamicSerializer resultSerializer;
 
-	private ThreadPoolExecutor executor;
+	private final Scheduler jobScheduler;
+	private final JobExecutor jobExecutor;
 
 	public LocalJobsImpl(
+		SerializerCollection serializers,
+
 		JobsBackend backend,
+
 		Delay defaultDelay,
 		JobListener[] listeners,
-		int minThreads,
+
 		int maxThreads,
-		int queueSize,
 		ClassMatchingHashMap<JobData<?>, JobRunner<?, ?>> runners
 	)
 	{
+		this.serializers = serializers;
+
 		this.backend = backend;
 		this.defaultDelay = defaultDelay;
 		this.listeners = listeners;
 
-		this.minThreads = minThreads;
-		this.maxThreads = maxThreads;
-		this.queueSize = queueSize;
-
 		this.runners = runners;
-		this.maxAutomaticAttempts = 5;
 
-		this.futures = CacheBuilder.newBuilder()
-			.weakValues()
-			.build(new CacheLoader<Long, CompletableFuture<Object>>()
-			{
-				@Override
-				public CompletableFuture<Object> load(Long key)
-					throws Exception
-				{
-					return new CompletableFuture<>();
-				}
-			});
-	}
+		resultSerializer = new CompactDynamicSerializer(serializers);
 
-	@Override
-	public void start()
-	{
-		ThreadFactory factory = new ThreadFactoryBuilder()
-			.setNameFormat("jobs-executor-%d")
-			.build();
-
-		executor = new ThreadPoolExecutor(
-			minThreads, maxThreads,
-			5l, TimeUnit.MINUTES,
-			new LinkedBlockingQueue<Runnable>(queueSize),
-			factory,
-			new RejectedExecutionHandler()
-			{
-				@Override
-				public void rejectedExecution(Runnable r, ThreadPoolExecutor executor)
-				{
-					if(executor.isShutdown())
-					{
-						throw new RejectedExecutionException();
-					}
-
-					try
-					{
-						executor.getQueue().put(r);
-					}
-					catch(InterruptedException e)
-					{
-						Thread.currentThread().interrupt();
-						throw new RejectedExecutionException();
-					}
-				}
-			}
+		jobScheduler = Schedulers.newBoundedElastic(
+			maxThreads,
+			Schedulers.DEFAULT_BOUNDED_ELASTIC_QUEUESIZE,
+			"jobs-executor"
 		);
 
-		backend.start(new JobControl()
-		{
-			@Override
-			public CompletionStage<Object> runJob(QueuedJob<?, ?> job)
-			{
-				return executeJob(job);
-			}
-
-			@Override
-			public void completeJob(long id, Object data)
-			{
-				CompletableFuture<Object> future = futures.getIfPresent(id);
-				if(future != null)
-				{
-					future.complete(data);
-				}
-			}
-
-			@Override
-			public void failJob(long id, Throwable t)
-			{
-				CompletableFuture<Object> future = futures.getIfPresent(id);
-				if(future != null)
-				{
-					future.completeExceptionally(t);
-				}
-			}
-		});
+		// TODO: Create a flux used to signal what runners are available
+		jobExecutor = new JobExecutor();
+		backend.jobs(Flux.empty())
+			.subscribe(jobExecutor);
 	}
 
 	@Override
-	public void stop()
+	public Mono<Void> stop()
 	{
-		backend.stop();
-
-		executor.shutdownNow();
-		try
-		{
-			executor.awaitTermination(1, TimeUnit.SECONDS);
-		}
-		catch(InterruptedException e)
-		{
-			Thread.currentThread().interrupt();
-		}
+		return Mono.fromRunnable(jobExecutor::dispose)
+			.and(backend.stop())
+			.and(Mono.fromRunnable(jobScheduler::dispose));
 	}
 
 	@Override
-	public Optional<Job<?, ?>> getViaId(String id)
+	public Mono<Job<?, ?>> getViaId(String id)
 	{
 		Objects.requireNonNull(id, "id must not be null");
 		return backend.getViaId(id)
 			.map(this::resolveJob);
 	}
 
-	void cancel(long id)
+	Mono<Void> cancel(long id)
 	{
-		backend.cancel(id);
+		return backend.cancel(id);
+	}
+
+	@SuppressWarnings("unchecked")
+	<R> Mono<R> result(BackendJobData data)
+	{
+		return (Mono<R>) backend.jobEvents(data.getId())
+			.publishOn(jobScheduler)
+			.filter(event -> event instanceof JobCompleteEvent || event instanceof JobFailureEvent || event instanceof JobCancelEvent)
+			.next()
+			.map(event -> {
+				if(event instanceof JobCompleteEvent)
+				{
+					return deserialize(resultSerializer, ((JobCompleteEvent) event).getData());
+				}
+				else if(event instanceof JobFailureEvent)
+				{
+					throw ((JobFailureEvent) event).exception;
+				}
+				else if(event instanceof JobCancelEvent)
+				{
+					throw new JobCancelledException("Job has been cancelled");
+				}
+
+				return null;
+			});
 	}
 
 	@Override
@@ -193,7 +153,7 @@ public class LocalJobsImpl
 	{
 		Objects.requireNonNull(jobData, "jobData must be supplied");
 
-		return new JobBuilder()
+		return new JobBuilder<D, R>()
 		{
 			private When when = Schedule.now();
 			private Schedule schedule;
@@ -227,74 +187,123 @@ public class LocalJobsImpl
 				return this;
 			}
 
-			@Override
-			public Job submit()
+			private Mono<BackendJobData> resolveBackendJobData()
 			{
-				if(schedule != null)
-				{
-					Objects.requireNonNull(knownId, "id must be supplied if a schedule is present");
-				}
-
-				OptionalLong timestamp = when.get();
-				if(! timestamp.isPresent())
-				{
-					CompletableFuture<Object> future = new CompletableFuture<>();
-					future.completeExceptionally(new JobException("Job is not scheduled for execution"));
-					return null;
-				}
-
-				long id;
-				if(knownId != null)
-				{
-					Optional<QueuedJob<?, ?>> q = backend.getViaId(knownId);
-					if(q.isPresent())
+				return Mono.fromSupplier(() -> {
+					if(schedule != null)
 					{
-						id = q.get().getId();
+						Objects.requireNonNull(knownId, "id must be supplied if a schedule is present");
 					}
-					else
+
+					OptionalLong timestamp = when.get();
+					if(! timestamp.isPresent())
 					{
-						id = backend.nextId();
+						// TODO: Return a "rejected" job
+						throw new JobException("Job is not scheduled for execution");
 					}
-				}
-				else
-				{
-					id = backend.nextId();
-				}
 
-				QueuedJob<?, ?> queuedJob = new QueuedJobImpl<>(
-					id,
-					knownId,
-					jobData,
-					timestamp.getAsLong(),
-					timestamp.getAsLong(),
-					schedule,
-					1
-				);
+					Serializer<D> serializer = serializers.find((Class<D>) jobData.getClass())
+						.orElseThrow(() -> new JobException("Could not find serializer for " + jobData.getClass()));
 
-				Job job =  resolveJob(queuedJob);
+					QualifiedName name = serializers.findName(serializer)
+						.orElseThrow(() -> new JobException("Job data must have have a qualified name, if using reflection based serialization annotate with @Named"));
 
-				/*
-				 * Ask the backend to accept the job after we've resolved
-				 * to avoid a race condition with the CompletableFuture.
-				 */
-				backend.accept(queuedJob);
+					Bytes data = serialize(serializer, jobData);
 
-				// Trigger the listeners
-				for(JobListener listener : listeners)
-				{
-					listener.jobScheduled(job);
-				}
+					return new QueuedJobImpl(
+						0,
+						knownId,
+						name,
+						data,
+						timestamp.getAsLong(),
+						timestamp.getAsLong(),
+						schedule,
+						1
+					);
+				});
+			}
 
-				return job;
+			@Override
+			public Mono<Job<D, R>> submit()
+			{
+				return resolveBackendJobData()
+					.flatMap(backend::accept)
+					.map(data -> (Job<D, R>) resolveJob(data))
+					.doOnNext(job -> {
+						// Trigger the listeners
+						for(JobListener listener : listeners)
+						{
+							listener.jobScheduled(job);
+						}
+					});
 			}
 		};
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	private Job<?, ?> resolveJob(QueuedJob<?, ?> q)
+	private <D extends JobData<R>, R> Job<D, R> resolveJob(BackendJobData q)
 	{
-		CompletableFuture<Object> future = futures.getUnchecked(q.getId());
-		return new JobImpl(this, q, future);
+		Serializer<?> serializer = serializers.find(q.getDataName())
+			.orElseThrow(() -> new JobException("Could not find serializer for " + q.getDataName()));
+
+		D data = (D) deserialize(serializer, q.getData());
+		return new JobImpl(this, q, data);
+	}
+
+	private <D> Bytes serialize(Serializer<D> serializer, D instance)
+	{
+		try
+		{
+			ByteArrayOutputStream baos = new ByteArrayOutputStream(1024);
+
+			// Version tag
+			baos.write(1);
+
+			// Serialize the object
+			BinaryOutput out = new BinaryOutput(baos);
+			if(instance == null && ! (serializer instanceof Serializer.NullHandling))
+			{
+				out.writeNull("root");
+			}
+			else
+			{
+				serializer.write(instance, "root", out);
+			}
+
+			out.flush();
+			return Bytes.create(baos.toByteArray());
+		}
+		catch(IOException | SerializationException e)
+		{
+			throw new JobException("Could not serialize job data; " + e.getMessage(), e);
+		}
+	}
+
+	private Object deserialize(Serializer<?> serializer, Bytes bytes)
+	{
+		try(InputStream in = bytes.asInputStream())
+		{
+			int version = in.read();
+
+			if(version != 1)
+			{
+				throw new JobException("Could not deserialize job data, unknown version of data: " + version);
+			}
+
+			try(BinaryInput binary = new BinaryInput(in))
+			{
+				if(binary.peek() == Token.NULL && ! (serializer instanceof Serializer.NullHandling))
+				{
+					return null;
+				}
+
+				return serializer.read(binary);
+			}
+		}
+		catch(IOException | SerializationException e)
+		{
+			throw new JobException("Could not deserialize job data; " + e.getMessage(), e);
+		}
 	}
 
 	/**
@@ -304,83 +313,27 @@ public class LocalJobsImpl
 	 * @return
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	private CompletionStage<Object> executeJob(QueuedJob<?, ?> job)
+	private Mono<Void> executeJob(BackendJobData job)
 	{
-		CompletableFuture<Object> result = new CompletableFuture<>();
-		executor.submit(() -> {
+		return Mono.defer(() -> {
+			JobEncounterImpl<?, ?> encounter = new JobEncounterImpl(job);
+
 			Optional<JobRunner<?, ?>> runner = runners.getBest(
-				(Class) job.getData().getClass()
+				(Class) encounter.getData().getClass()
 			);
 
 			if(! runner.isPresent())
 			{
 				logger.warn("No job runner found for {}", job.getData());
-				return;
+				return Mono.empty();
 			}
 
-			JobEncounterImpl<?, ?> encounter = new JobEncounterImpl(job);
-
-			try
-			{
-				encounter.executeOn(runner.get());
-
-				if(! encounter.failed && ! encounter.completed)
-				{
-					encounter.complete();
-				}
-			}
-			catch(Throwable t)
-			{
-				if(! encounter.failed && ! encounter.completed)
-				{
-					// This is the automatic retry - limit the number of retries
-					if(encounter.getAttempt() < maxAutomaticAttempts)
-					{
-						encounter.fail(t);
-					}
-					else
-					{
-						encounter.failNoRetry(t);
-					}
-				}
-			}
-
-			// Finish up the encounter
-			encounter.finish(result);
-		});
-
-		return result;
-	}
-
-	private class JobEncounterImpl<D extends JobData<R>, R>
-		implements JobEncounter<D, R>
-	{
-		private final QueuedJob<D, R> scheduledJob;
-		private final Job<?, ?> job;
-
-		private boolean completed;
-		private Object completedResult;
-
-		private boolean failed;
-		private Throwable failedException;
-		private long failedRetryTime;
-
-		public JobEncounterImpl(QueuedJob<D, R> job)
-		{
-			this.scheduledJob = job;
-			this.job = resolveJob(job);
-		}
-
-		@SuppressWarnings({ "unchecked", "rawtypes" })
-		public void executeOn(JobRunner<?, ?> jobRunner)
-			throws Exception
-		{
 			// Trigger the listeners
 			for(JobListener listener : listeners)
 			{
 				try
 				{
-					listener.jobStarted(job);
+					listener.jobStarted(encounter.job);
 				}
 				catch(Throwable t)
 				{
@@ -388,279 +341,296 @@ public class LocalJobsImpl
 				}
 			}
 
-			((JobRunner) jobRunner).run((JobEncounter) this);
+			return runner.get().run((JobEncounter) encounter)
+				.flatMap(object -> handleJobComplete(encounter, object))
+				.onErrorResume(t -> handleJobError(encounter, (Throwable) t));
+		});
+	}
+
+	private Mono<Void> handleJobError(JobEncounterImpl<?, ?> encounter, Throwable t)
+	{
+		BackendJobData backendJob = encounter.data;
+		Job<?, ?> job = encounter.job;
+
+		if(t instanceof JobRetryException && ((JobRetryException) t).willRetry())
+		{
+			Instant when = ((JobRetryException) t).getWhen();
+
+			if(t.getCause() == null)
+			{
+				logger.warn(
+					"Job " + job.getData() + " failed, retrying at " + when
+				);
+			}
+			else
+			{
+				logger.warn(
+					"Job " + job.getData() + " failed, retrying at " + when + "; " + t.getCause().getMessage(),
+					t
+				);
+			}
+
+			/*
+			 * Trigger the listeners to indicate that this is a
+			 * temporary failure.
+			 */
+			for(JobListener listener : listeners)
+			{
+				try
+				{
+					listener.jobFailed(encounter.job, true);
+				}
+				catch(Throwable t0)
+				{
+					logger.warn("Calling " + listener + " for failed job errored", t0);
+				}
+			}
+
+			// Queue it up with the new timeout
+			return backend.accept(new QueuedJobImpl(
+				backendJob.getId(),
+				backendJob.getKnownId().orElse(null),
+				backendJob.getDataName(),
+				backendJob.getData(),
+				backendJob.getFirstScheduled(),
+				when.toEpochMilli(),
+				backendJob.getSchedule().orElse(null),
+				backendJob.getAttempt() + 1
+			))
+				.flatMap(data -> backend.retry(backendJob.getId(), (JobRetryException) t));
+		}
+		else
+		{
+			logger.warn(
+				"Job " + job.getData() + " failed, giving up without retrying; " + t.getMessage(),
+				t
+			);
+
+			/*
+			* Trigger the listeners to indicate that this is a
+			* permanent failure.
+			*/
+			for(JobListener listener : listeners)
+			{
+				try
+				{
+					listener.jobFailed(encounter.job, false);
+				}
+				catch(Throwable t0)
+				{
+					logger.warn("Calling " + listener + " for failed job errored", t0);
+				}
+			}
+
+			// Report the error to the backend
+			return backend.fail(encounter.data.getId(), JobException.wrap(t));
+		}
+	}
+
+	private Mono<Void> handleJobComplete(JobEncounterImpl<?, ?> encounter, Object result)
+	{
+		BackendJobData backendJob = encounter.data;
+		Job<?, ?> job = encounter.job;
+
+		logger.info("Job " + job.getData() + " completed");
+
+		// Trigger the listeners to indicate job completion
+		for(JobListener listener : listeners)
+		{
+			try
+			{
+				listener.jobCompleted(encounter.job);
+			}
+			catch(Throwable t)
+			{
+				logger.warn("Calling " + listener + " for completed job errored", t);
+			}
+		}
+
+		Bytes bytes = serialize(resultSerializer, result);
+		Mono<Void> reportSuccess = backend.complete(backendJob.getId(), bytes);
+
+		if(encounter.data.getSchedule().isPresent())
+		{
+			/*
+				* If there is a schedule active ask it about the next
+				* execution time.
+				*/
+			OptionalLong nextTime = encounter.data.getSchedule().get().getNextExecution();
+			if(nextTime.isPresent() && nextTime.getAsLong() > System.currentTimeMillis())
+			{
+				return reportSuccess
+					.and(backend.accept(new QueuedJobImpl(
+						backendJob.getId(),
+						backendJob.getKnownId().orElse(null),
+						backendJob.getDataName(),
+						backendJob.getData(),
+						backendJob.getFirstScheduled(),
+						nextTime.getAsLong(),
+						backendJob.getSchedule().orElse(null),
+						1
+					)))
+					.then();
+			}
+		}
+
+		return reportSuccess;
+	}
+
+	private class JobExecutor
+		extends BaseSubscriber<BackendJobData>
+	{
+		@Override
+		protected void hookOnSubscribe(Subscription subscription)
+		{
+			request(1);
+		}
+
+		@Override
+		protected void hookOnNext(BackendJobData value)
+		{
+			executeJob(value)
+				.subscribeOn(jobScheduler)
+				.subscribe();
+
+			request(1);
+		}
+	}
+
+	private class JobEncounterImpl<D extends JobData<R>, R>
+		implements JobEncounter<D, R>
+	{
+		private final BackendJobData data;
+		private final Job<?, ?> job;
+
+		public JobEncounterImpl(BackendJobData job)
+		{
+			this.data = job;
+			this.job = resolveJob(job);
 		}
 
 		@Override
 		public D getData()
 		{
-			return (D) scheduledJob.getData();
+			return (D) job.getData();
 		}
 
 		@Override
 		public Instant getFirstScheduled()
 		{
-			return Instant.ofEpochMilli(scheduledJob.getFirstScheduled());
+			return Instant.ofEpochMilli(data.getFirstScheduled());
 		}
 
 		@Override
-		public void complete()
+		public JobRetryException retry()
 		{
-			complete(null);
+			return retry(defaultDelay);
 		}
 
 		@Override
-		public void complete(Object result)
+		public JobRetryException retry(Throwable t)
 		{
-			if(this.completed) return;
-
-			this.completed = true;
-			this.completedResult = result;
+			return retry(defaultDelay, t);
 		}
 
 		@Override
-		public void failNoRetry(Throwable t)
+		public JobRetryException retry(Delay delay)
 		{
-			failAndRetryAt(t, -1);
+			return retry(delay, null);
 		}
 
 		@Override
-		public void fail(Throwable t)
-		{
-			fail(t, defaultDelay);
-		}
-
-		@Override
-		public void fail(Throwable t, Delay delay)
+		public JobRetryException retry(Delay delay, Throwable t)
 		{
 			Objects.requireNonNull(delay, "delay can not be null");
 
-			// Get the delay and retry the job if present
 			OptionalLong time = delay.getDelay(getAttempt());
 			if(time.isPresent())
 			{
-				failAndRetryIn(t, time.getAsLong());
+				return retryIn(t, time.getAsLong());
 			}
 			else
 			{
-				failAndRetryAt(t, -1);
+				return retry(t, null);
 			}
 		}
 
 		@Override
-		public void fail(Throwable t, Duration waitTime)
+		public JobRetryException retry(Duration waitTime)
+		{
+			return retry(waitTime, null);
+		}
+
+		@Override
+		public JobRetryException retry(Duration waitTime, Throwable t)
 		{
 			Objects.requireNonNull(waitTime, "waitTime can not be null");
 
-			failAndRetryIn(t, waitTime.toMillis());
-		}
-
-		private void failAndRetryIn(Throwable t, long retryDelay)
-		{
-			if(retryDelay < 0)
-			{
-				failAndRetryAt(t, -1);
-			}
-			else
-			{
-				failAndRetryAt(t, System.currentTimeMillis() + retryDelay);
-			}
+			return retryIn(t, waitTime.toMillis());
 		}
 
 		@Override
-		public void fail(Throwable t, When when)
+		public JobRetryException retry(When when)
 		{
+			return retry(when, null);
+		}
+
+		@Override
+		public JobRetryException retry(When when, Throwable t)
+		{
+			Objects.requireNonNull(when, "when can not be null");
+
 			OptionalLong timestamp = when.get();
 			if(timestamp.isPresent())
 			{
-				failAndRetryAt(t, timestamp.getAsLong());
+				return retry(t, Instant.ofEpochMilli(timestamp.getAsLong()));
 			}
 			else
 			{
-				failNoRetry(t);
+				return retry(t, null);
 			}
 		}
 
-		private void failAndRetryAt(Throwable t, long ms)
+		private JobRetryException retryIn(Throwable t, long retryDelay)
 		{
-			if(this.failed) return;
+			if(retryDelay < 0)
+			{
+				return retry(t, null);
+			}
+			else
+			{
+				return retry(t, Instant.ofEpochMilli(System.currentTimeMillis() + retryDelay));
+			}
+		}
 
-			this.failed = true;
-			this.failedRetryTime = ms;
-			this.failedException = t;
+		private JobRetryException retry(Throwable t, Instant instant)
+		{
+			String message;
+			if(instant == null)
+			{
+				message = "Failing job without retry";
+			}
+			else
+			{
+				message = "Retrying job at " + instant;
+			}
+
+			if(t != null && t.getMessage() != null)
+			{
+				message += "; " + t.getMessage();
+			}
+
+			return new JobRetryException(
+				message,
+				t,
+				instant
+			);
 		}
 
 		@Override
 		public int getAttempt()
 		{
-			return scheduledJob.getAttempt();
+			return data.getAttempt();
 		}
-
-		public void finish(CompletableFuture<Object> future)
-		{
-			if(failed)
-			{
-				if(failedRetryTime < 0)
-				{
-					logger.warn(
-						"Job " + scheduledJob.getData() + " failed, giving up without retrying; " + failedException.getMessage(),
-						failedException
-					);
-
-					/*
-					 * Trigger the listeners to indicate that this is a
-					 * permanent failure.
-					 */
-					for(JobListener listener : listeners)
-					{
-						try
-						{
-							listener.jobFailed(job, false);
-						}
-						catch(Throwable t)
-						{
-							logger.warn("Calling " + listener + " for failed job errored", t);
-						}
-					}
-
-					// Fail the call
-					future.completeExceptionally(failedException);
-				}
-				else
-				{
-					long timeout = failedRetryTime;
-
-					String formattedDelay = formatDelay(System.currentTimeMillis() - failedRetryTime);
-
-					logger.warn(
-						"Job " + scheduledJob.getData() + " failed, retrying in " + formattedDelay + "; " + failedException.getMessage(),
-						failedException
-					);
-
-					/*
-					 * Trigger the listeners to indicate that this is a
-					 * temporary failure.
-					 */
-					for(JobListener listener : listeners)
-					{
-						try
-						{
-							listener.jobFailed(job, true);
-						}
-						catch(Throwable t)
-						{
-							logger.warn("Calling " + listener + " for failed job errored", t);
-						}
-					}
-
-					// Indicate that this has failed - but that it will be retried
-					future.completeExceptionally(new JobRetryException("Job failed, retry in " + formattedDelay, failedException));
-
-					// Queue it up with the new timeout
-					backend.accept(new QueuedJobImpl<>(
-						scheduledJob.getId(),
-						scheduledJob.getKnownId().orElse(null),
-						scheduledJob.getData(),
-						scheduledJob.getFirstScheduled(),
-						timeout,
-						scheduledJob.getSchedule().orElse(null),
-						scheduledJob.getAttempt() + 1
-					));
-				}
-			}
-			else
-			{
-				logger.info("Job " + scheduledJob.getData() + " completed");
-
-				// Trigger the listeners to indicate job completion
-				for(JobListener listener : listeners)
-				{
-					try
-					{
-						listener.jobCompleted(job);
-					}
-					catch(Throwable t)
-					{
-						logger.warn("Calling " + listener + " for completed job errored", t);
-					}
-				}
-
-				future.complete(this.completedResult);
-
-				if(scheduledJob.getSchedule().isPresent())
-				{
-					/*
-					 * If there is a schedule active ask it about the next
-					 * execution time.
-					 */
-					OptionalLong nextTime = scheduledJob.getSchedule().get().getNextExecution();
-					if(nextTime.isPresent() && nextTime.getAsLong() > System.currentTimeMillis())
-					{
-						backend.accept(new QueuedJobImpl<>(
-							scheduledJob.getId(),
-							scheduledJob.getKnownId().orElse(null),
-							scheduledJob.getData(),
-							scheduledJob.getFirstScheduled(),
-							nextTime.getAsLong(),
-							scheduledJob.getSchedule().orElse(null),
-							1
-						));
-					}
-				}
-			}
-		}
-	}
-
-	private static final String formatDelay(long delay)
-	{
-		long milliseconds = delay % 1000;
-		long t = delay / 1000;
-
-		long seconds = t % 60;
-		t /= 60;
-
-		long minutes = t % 60;
-		t /= 60;
-
-		long hours = t % 24;
-		t /= 24;
-
-		long days = t;
-
-		StringBuilder b = new StringBuilder();
-		if(days > 0)
-		{
-			b.append(days).append('d');
-		}
-
-		if(hours > 0 || days > 0)
-		{
-			if(b.length() > 0) b.append(' ');
-
-			b.append(hours).append('h');
-		}
-
-		if(minutes > 0 || hours > 0 || days > 0)
-		{
-			if(b.length() > 0) b.append(' ');
-
-			b.append(minutes).append('m');
-		}
-
-		if(seconds > 0 || minutes > 0 || hours > 0 || days > 0)
-		{
-			if(b.length() > 0) b.append(' ');
-
-			b.append(seconds).append('s');
-		}
-
-		if(milliseconds > 0 || seconds > 0 || minutes > 0 || hours > 0 || days > 0)
-		{
-			if(b.length() > 0) b.append(' ');
-
-			b.append(milliseconds).append("ms");
-		}
-
-		return b.toString();
 	}
 }

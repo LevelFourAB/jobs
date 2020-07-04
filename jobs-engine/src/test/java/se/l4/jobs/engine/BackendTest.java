@@ -1,34 +1,33 @@
 package se.l4.jobs.engine;
 
-import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.fail;
 
 import java.time.Duration;
 import java.util.OptionalLong;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 
-import com.carrotsearch.randomizedtesting.RandomizedTest;
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
 
 import org.hamcrest.MatcherAssert;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import reactor.core.publisher.Mono;
 import se.l4.jobs.Job;
-import se.l4.jobs.JobCancelledException;
+import se.l4.jobs.JobNotFoundException;
 import se.l4.jobs.Schedule;
+import se.l4.jobs.engine.backend.JobsBackend;
 
 /**
  * Abstract base class for tests that a backend should pass.
  */
+@ThreadLeakFilters(filters={ ReactorThreadLeakFilter.class })
 public abstract class BackendTest
-	extends RandomizedTest
 {
 	protected LocalJobs jobs;
 
-	protected abstract JobsBackend createBackend();
+	protected abstract Mono<JobsBackend> createBackend();
 
 	protected LocalJobs createJobs()
 	{
@@ -36,7 +35,8 @@ public abstract class BackendTest
 			.withBackend(createBackend())
 			.addRunner(new TestDataRunner())
 			.withDefaultDelay(attempt -> OptionalLong.of(1))
-			.build();
+			.start()
+			.block();
 	}
 
 	@Before
@@ -44,60 +44,62 @@ public abstract class BackendTest
 		throws Exception
 	{
 		jobs = createJobs();
-		jobs.start();
 	}
 
 	@After
 	public void after()
 		throws Exception
 	{
-		jobs.stop();
+		if(jobs != null)
+		{
+			jobs.stop().block();
+		}
 	}
 
 	@Test
 	public void test1()
 	{
-		CompletableFuture<String> future = jobs.add(new TestData("a", 1))
+		String value = jobs.add(new TestData("a", 1))
 			.submit()
-			.result();
+			.flatMap(Job::result)
+			.block(Duration.ofSeconds(1));
 
-		String value = future.join();
 		MatcherAssert.assertThat(value, is("a"));
 	}
 
 	@Test
 	public void test2()
 	{
-		CompletableFuture<String> future = jobs.add(new TestData("a", 2))
+		String value = jobs.add(new TestData("a", 2))
 			.submit()
-			.result();
+			.flatMap(Job::result)
+			.block(Duration.ofSeconds(1));
 
-		String value = future.join();
 		MatcherAssert.assertThat(value, is("a"));
 	}
 
 	@Test
 	public void test3()
 	{
-		CompletableFuture<String> future = jobs.add(new TestData("a", 2))
+		String value = jobs.add(new TestData("a", 2))
 			.withSchedule(Schedule.after(Duration.ofSeconds(1)))
 			.submit()
-			.result();
+			.flatMap(Job::result)
+			.block(Duration.ofSeconds(2));
 
-		String value = future.join();
 		MatcherAssert.assertThat(value, is("a"));
 	}
 
 	@Test
 	public void test4()
 	{
-		CompletableFuture<String> future = jobs.add(new TestData("a", 1))
+		String value = jobs.add(new TestData("a", 1))
 			.withId("knownId")
 			.withSchedule(Schedule.after(Duration.ofMillis(500)))
 			.submit()
-			.result();
+			.flatMap(Job::result)
+			.block(Duration.ofSeconds(1));
 
-		String value = future.join();
 		MatcherAssert.assertThat(value, is("a"));
 	}
 
@@ -105,64 +107,64 @@ public abstract class BackendTest
 	public void test5()
 		throws Exception
 	{
-		CompletableFuture<String> future = jobs.add(new TestData("a", 1))
+		Job<TestData, String> job = jobs.add(new TestData("a", 1))
 			.withId("knownId")
 			.withSchedule(Schedule.after(Duration.ofMillis(700)))
 			.submit()
-			.result();
+			.block(Duration.ofSeconds(1));
 
 		// Replace the invocation with a new one
 		jobs.add(new TestData("a", 1))
 			.withId("knownId")
 			.withSchedule(Schedule.after(Duration.ofMillis(1000)))
 			.submit()
-			.result();
+			.block(Duration.ofSeconds(1));
 
 		// After the original 500 ms we should not be done
 		Thread.sleep(500);
-		MatcherAssert.assertThat(future.isDone(), is(false));
+		//MatcherAssert.assertThat(future.isDone(), is(false));
 
-		String value = future.join();
+		String value = job.result().block(Duration.ofSeconds(1));
 		MatcherAssert.assertThat(value, is("a"));
 	}
 
 	@Test
 	public void test6()
-		throws Exception
 	{
-		Job job = jobs.add(new TestData("a", 1))
+		Job<TestData, String> job = jobs.add(new TestData("a", 1))
 			.withId("knownId")
 			.withSchedule(Schedule.after(Duration.ofMillis(500)))
-			.submit();
+			.submit()
+			.block(Duration.ofSeconds(1));
 
-		job.cancel();
+		job.cancel().block(Duration.ofSeconds(1));
 
 		try
 		{
-			job.result().join();
+			job.result().block(Duration.ofSeconds(1));
 
 			fail();
 		}
-		catch(CompletionException e)
+		catch(JobNotFoundException e)
 		{
-			MatcherAssert.assertThat(e.getCause(), instanceOf(JobCancelledException.class));
+			// Do nothing, a JobNotFoundException is expected
 		}
 	}
 
 	@Test
 	public void test7()
-		throws Exception
 	{
-		Job job = jobs.add(new TestData("a", 1))
+		Job<TestData, String> job = jobs.add(new TestData("a", 1))
 			.withId("knownId")
 			.withSchedule(Schedule.after(Duration.ofMillis(10)).repeat())
-			.submit();
+			.submit()
+			.block(Duration.ofSeconds(1));
 
 		// First result
-		job.result().join();
+		job.result().block(Duration.ofSeconds(1));
 
 		// Second result
-		job.result().join();
+		job.result().block(Duration.ofSeconds(1));
 	}
 
 	@Test
@@ -171,20 +173,20 @@ public abstract class BackendTest
 		for(int i=0; i<50; i++) {
 			jobs.add(new TestData("a", 1))
 				.submit()
-				.result();
+				.subscribe();
 		}
 
-		CompletableFuture<String> future = jobs.add(new TestData("a", 1))
+		String value = jobs.add(new TestData("a", 1))
 			.submit()
-			.result();
+			.flatMap(Job::result)
+			.block(Duration.ofSeconds(1));
 
-		String value = future.join();
 		MatcherAssert.assertThat(value, is("a"));
 
 		/*
 		 * As this test doesn't wait for all invocations stop the jobs instance
 		 * to prevent thread leaks.
 		 */
-		jobs.stop();
+		jobs.stop().block();
 	}
 }

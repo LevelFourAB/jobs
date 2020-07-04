@@ -1,8 +1,9 @@
-package se.l4.jobs.engine;
+package se.l4.jobs.engine.backend;
 
 import java.util.Optional;
 
-import se.l4.jobs.JobData;
+import se.l4.commons.io.Bytes;
+import se.l4.commons.serialization.QualifiedName;
 import se.l4.jobs.Schedule;
 
 /**
@@ -10,14 +11,22 @@ import se.l4.jobs.Schedule;
  *
  * @param <D>
  */
-public interface QueuedJob<D extends JobData<R>, R>
+public interface BackendJobData
 {
 	/**
-	 * Get the automatically generated identifier of the job.
+	 * Get the identifier of the job.
 	 *
 	 * @return
 	 */
 	long getId();
+
+	/**
+	 * Create a copy of this data with another id.
+	 *
+	 * @param id
+	 * @return
+	 */
+	BackendJobData withId(long id);
 
 	/**
 	 * Get the known identifier for this job.
@@ -27,11 +36,18 @@ public interface QueuedJob<D extends JobData<R>, R>
 	Optional<String> getKnownId();
 
 	/**
-	 * Get the data of the job.
+	 * Get the qualified name of the data.
 	 *
 	 * @return
 	 */
-	D getData();
+	QualifiedName getDataName();
+
+	/**
+	 * Get the binary data of the job.
+	 *
+	 * @return
+	 */
+	Bytes getData();
 
 	/**
 	 * Get the time at which this job was first scheduled to run.

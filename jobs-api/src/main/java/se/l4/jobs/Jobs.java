@@ -1,6 +1,6 @@
 package se.l4.jobs;
 
-import java.util.Optional;
+import reactor.core.publisher.Mono;
 
 /**
  * Jobs interface, for submitting and scheduling jobs.
@@ -24,5 +24,5 @@ public interface Jobs
 	 * @return
 	 *   optional containing the job, or empty optional if job is not scheduled
 	 */
-	Optional<Job<?, ?>> getViaId(String id);
+	Mono<Job<?, ?>> getViaId(String id);
 }

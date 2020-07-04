@@ -1,26 +1,27 @@
 package se.l4.jobs.engine;
 
+import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 
-import se.l4.jobs.JobException;
+import reactor.core.publisher.Mono;
 
 public class TestDataRunner
 	implements JobRunner<TestData, String>
 {
 	@Override
-	public void run(JobEncounter<TestData, String> encounter)
-		throws Exception
+	public Mono<String> run(JobEncounter<TestData, String> encounter)
 	{
-		Thread.sleep(50 + ThreadLocalRandom.current().nextInt(120));
-
-		TestData td = encounter.getData();
-		if(td.getAttempts() == encounter.getAttempt())
-		{
-			encounter.complete(td.getValue());
-		}
-		else
-		{
-			encounter.fail(new JobException("Needs to be retried later"));
-		}
+		return Mono.delay(Duration.ofMillis(50 + ThreadLocalRandom.current().nextInt(120)))
+			.map(delay -> {
+				TestData td = encounter.getData();
+				if(td.getAttempts() == encounter.getAttempt())
+				{
+					return td.getValue();
+				}
+				else
+				{
+					throw encounter.retry();
+				}
+			});
 	}
 }

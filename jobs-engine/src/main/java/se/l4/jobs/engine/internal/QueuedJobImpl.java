@@ -2,21 +2,22 @@ package se.l4.jobs.engine.internal;
 
 import java.util.Optional;
 
+import se.l4.commons.io.Bytes;
+import se.l4.commons.serialization.QualifiedName;
 import se.l4.jobs.JobData;
 import se.l4.jobs.Schedule;
-import se.l4.jobs.engine.QueuedJob;
+import se.l4.jobs.engine.backend.BackendJobData;
 
 /**
- * Implementation of {@link QueuedJob}.
- *
- * @param <D>
+ * Implementation of {@link JobData}.
  */
-public class QueuedJobImpl<D extends JobData<R>, R>
-	implements QueuedJob<D, R>
+public class QueuedJobImpl
+	implements BackendJobData
 {
 	private final long id;
 	private final String knownId;
-	private final D data;
+	private final QualifiedName dataName;
+	private final Bytes data;
 	private final long firstScheduledTime;
 	private final long scheduledTime;
 	private final Schedule schedule;
@@ -25,7 +26,8 @@ public class QueuedJobImpl<D extends JobData<R>, R>
 	public QueuedJobImpl(
 		long id,
 		String knownId,
-		D data,
+		QualifiedName dataName,
+		Bytes data,
 		long firstScheduledTime,
 		long scheduledTime,
 		Schedule schedule,
@@ -34,6 +36,7 @@ public class QueuedJobImpl<D extends JobData<R>, R>
 	{
 		this.id = id;
 		this.knownId = knownId;
+		this.dataName = dataName;
 		this.data = data;
 		this.firstScheduledTime = firstScheduledTime;
 		this.scheduledTime = scheduledTime;
@@ -48,13 +51,34 @@ public class QueuedJobImpl<D extends JobData<R>, R>
 	}
 
 	@Override
+	public BackendJobData withId(long id)
+	{
+		return new QueuedJobImpl(
+			id,
+			knownId,
+			dataName,
+			data,
+			firstScheduledTime,
+			scheduledTime,
+			schedule,
+			attempt
+		);
+	}
+
+	@Override
 	public Optional<String> getKnownId()
 	{
 		return Optional.ofNullable(knownId);
 	}
 
 	@Override
-	public D getData()
+	public QualifiedName getDataName()
+	{
+		return dataName;
+	}
+
+	@Override
+	public Bytes getData()
 	{
 		return data;
 	}

@@ -1,12 +1,33 @@
 package se.l4.jobs.engine;
 
-import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import se.l4.jobs.JobCancelledException;
+import org.reactivestreams.Publisher;
+
+import reactor.core.Disposable;
+import reactor.core.publisher.ConnectableFlux;
+import reactor.core.publisher.EmitterProcessor;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
+import reactor.core.publisher.FluxSink.OverflowStrategy;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
+import se.l4.commons.io.Bytes;
+import se.l4.jobs.JobException;
+import se.l4.jobs.JobNotFoundException;
+import se.l4.jobs.engine.backend.BackendJobData;
+import se.l4.jobs.engine.backend.JobCancelEvent;
+import se.l4.jobs.engine.backend.JobCompleteEvent;
+import se.l4.jobs.engine.backend.JobFailureEvent;
+import se.l4.jobs.engine.backend.JobRunnerEvent;
+import se.l4.jobs.engine.backend.JobTrackingEvent;
+import se.l4.jobs.engine.backend.JobsBackend;
 
 /**
  * Backend that will keeps jobs stored in memory. This type of backend is
@@ -17,123 +38,163 @@ import se.l4.jobs.JobCancelledException;
 public class InMemoryJobsBackend
 	implements JobsBackend
 {
+	private final Scheduler scheduler;
+
 	private final AtomicLong id;
-
 	private final DelayQueue<DelayedJob> queue;
-	private Thread queueThread;
+	private final Set<Long> queuedOrRunning;
 
-	private JobControl control;
+	private final ConnectableFlux<JobTrackingEvent> events;
+	private final FluxSink<JobTrackingEvent> eventSink;
+	private final Disposable eventDisposable;
 
-	public InMemoryJobsBackend()
+	private InMemoryJobsBackend()
 	{
-		queue = new DelayQueue<>();
+		scheduler = Schedulers.newSingle("jobs-queuer");
+
 		id = new AtomicLong(0);
+		queue = new DelayQueue<>();
+		queuedOrRunning = new ConcurrentSkipListSet<>();
+
+		EmitterProcessor<JobTrackingEvent> events = EmitterProcessor.create();
+		eventSink = events.sink(OverflowStrategy.DROP);
+
+		this.events = events.publish();
+		eventDisposable = this.events.connect();
+	}
+
+	public static Mono<JobsBackend> create()
+	{
+		return Mono.fromCallable(InMemoryJobsBackend::new);
 	}
 
 	@Override
-	public void start(JobControl control)
+	public Mono<Void> stop()
 	{
-		this.control = control;
-		queueThread = new Thread(() -> queueJobs(control), "jobs-queuer");
-		queueThread.start();
+		return Mono.fromRunnable(() -> {
+			eventDisposable.dispose();
+			scheduler.dispose();
+		});
 	}
 
 	@Override
-	public void stop()
+	public Flux<BackendJobData> jobs(Publisher<JobRunnerEvent> events)
 	{
-		try
-		{
-			queueThread.interrupt();
-			queueThread.join();
-		}
-		catch(InterruptedException e)
-		{
-			// Ignore this interruption
-			Thread.currentThread().interrupt();
-		}
+		return Mono.fromCallable(queue::take)
+			.map(delayed -> delayed.job)
+			.repeat()
+			.subscribeOn(scheduler);
 	}
 
 	@Override
-	public long nextId()
+	public Mono<BackendJobData> accept(BackendJobData job)
 	{
-		return id.incrementAndGet();
-	}
-
-	@Override
-	public void accept(QueuedJob<?, ?> job)
-	{
-		queue.add(new DelayedJob(job));
-	}
-
-	@Override
-	public void cancel(long id)
-	{
-		for(DelayedJob q : queue)
-		{
-			if(q.job.getId() == id)
+		return Mono.defer(() -> {
+			if(job.getId() > 0)
 			{
-				queue.remove(q);
-				control.failJob(id, new JobCancelledException("Job was cancelled"));
-				return;
+				return Mono.just(job.getId());
 			}
-		}
+			else if(job.getKnownId().isPresent())
+			{
+				return getViaId(job.getKnownId().get())
+					.map(data -> data.getId())
+					.defaultIfEmpty(0l);
+			}
+			else
+			{
+				return Mono.just(0l);
+			}
+		})
+			.map(id -> id == 0 ? this.id.incrementAndGet() : id)
+			.map(value -> {
+				BackendJobData withUpdatedId = job.withId(value);
+				queue.add(new DelayedJob(withUpdatedId));
+				queuedOrRunning.add(value);
+				return withUpdatedId;
+			});
 	}
 
 	@Override
-	public Optional<QueuedJob<?, ?>> getViaId(String id)
+	public Flux<JobTrackingEvent> jobEvents(long id)
 	{
-		for(DelayedJob q : queue)
-		{
-			if(q.job.getKnownId().isPresent() && id.equals(q.job.getKnownId().get()))
+		return Flux.defer(() -> {
+			if(queuedOrRunning.contains(id))
 			{
-				return Optional.of(q.job);
+				// If the job is still being processed, listen for future events
+				return this.events
+					.filter(event -> event.getId() == id);
 			}
-		}
-
-		return Optional.empty();
+			else
+			{
+				return Flux.just(new JobFailureEvent(id, new JobNotFoundException("Job has completed, failed or cancelled")));
+			}
+		});
 	}
 
-	private void queueJobs(JobControl control)
+	@Override
+	public Mono<Void> cancel(long id)
 	{
-		while(! Thread.currentThread().isInterrupted())
-		{
-			try
+		return Mono.fromRunnable(() -> {
+			for(DelayedJob q : queue)
 			{
-				DelayedJob queuedJob  = queue.take();
-				long id = queuedJob.job.getId();
-				control.runJob(queuedJob.job)
-					.whenComplete((value, e) -> {
-						if(e == null)
-						{
-							// If not completed with an exception register as completed
-							control.completeJob(id, value);
-						}
-						else
-						{
-							if(! (e instanceof JobRetryException))
-							{
-								/*
-								 * For everything that isn't a retry report it
-								 * back to the control.
-								 */
-								control.failJob(id, e);
-							}
-						}
-					});
+				if(q.job.getId() == id)
+				{
+					queue.remove(q);
+					queuedOrRunning.remove(id);
+
+					eventSink.next(new JobCancelEvent(id));
+					return;
+				}
 			}
-			catch(InterruptedException e)
+		});
+	}
+
+	@Override
+	public Mono<Void> complete(long id, Bytes bytes)
+	{
+		return Mono.fromRunnable(() -> {
+			queuedOrRunning.remove(id);
+			eventSink.next(new JobCompleteEvent(id, bytes));
+		});
+	}
+
+	@Override
+	public Mono<Void> fail(long id, JobException reason)
+	{
+		return Mono.fromRunnable(() -> {
+			queuedOrRunning.remove(id);
+			eventSink.next(new JobFailureEvent(id, reason));
+		});
+	}
+
+	@Override
+	public Mono<Void> retry(long id, JobRetryException reason)
+	{
+		return Mono.empty();
+	}
+
+	@Override
+	public Mono<BackendJobData> getViaId(String id)
+	{
+		return Mono.fromSupplier(() -> {
+			for(DelayedJob q : queue)
 			{
-				Thread.currentThread().interrupt();
+				if(q.job.getKnownId().isPresent() && id.equals(q.job.getKnownId().get()))
+				{
+					return q.job;
+				}
 			}
-		}
+
+			return null;
+		});
 	}
 
 	private static class DelayedJob
 		implements Delayed
 	{
-		private final QueuedJob<?, ?> job;
+		private final BackendJobData job;
 
-		public DelayedJob(QueuedJob<?, ?> job)
+		public DelayedJob(BackendJobData job)
 		{
 			this.job = job;
 		}

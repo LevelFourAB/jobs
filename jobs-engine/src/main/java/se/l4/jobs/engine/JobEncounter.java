@@ -48,56 +48,81 @@ public interface JobEncounter<D extends JobData<R>, R>
 	Instant getFirstScheduled();
 
 	/**
-	 * Complete this job without a result.
+	 * Create an exception that will retry this job later based on the default
+	 * retry policy. The job may fail permanently if the maximum number of
+	 * retries is reached.
 	 *
+	 * @return
 	 */
-	void complete();
+	JobRetryException retry();
 
 	/**
-	 * Complete this job.
-	 *
-	 */
-	void complete(R result);
-
-	/**
-	 * Fail this job with the given {@link Throwable} and never retry it.
+	 * Create an exception that will retry this job later based on the default
+	 * retry policy. The job may fail permanently if the maximum number of
+	 * retries is reached.
 	 *
 	 * @param t
+	 * @return
 	 */
-	void failNoRetry(Throwable t);
+	JobRetryException retry(Throwable t);
 
 	/**
-	 * Fail this job with the given {@link Throwable} and apply a default
-	 * delay before retrying.
+	 * Create an exception that will retry this job after a certain
+	 * {@link Delay}. The job may fail  permanently if the maximum number of
+	 * retries according to the delay is reached.
 	 *
-	 * @param t
-	 */
-	void fail(Throwable t);
-
-	/**
-	 * Fail this job with the given {@link Throwable} and apply a delay by
-	 * asking a {@link Delay} to calculate it.
-	 *
-	 * @param t
 	 * @param delay
+	 * @return
 	 */
-	void fail(Throwable t, Delay delay);
+	JobRetryException retry(Delay delay);
 
 	/**
-	 * Fail this job with the given {@link Throwable} and specify a
-	 * minimum time to wait before retrying it.
+	 * Create an exception that will retry this job after a certain
+	 * {@link Delay}. The job may fail permanently if the maximum number of
+	 * retries according to the delay is reached.
 	 *
+	 * @param delay
 	 * @param t
+	 * @return
+	 */
+	JobRetryException retry(Delay delay, Throwable t);
+
+	/**
+	 * Create an exception that will retry this job after a minimum wait time.
+	 * Will retry indefinitely.
+	 *
 	 * @param waitTime
+	 * @return
 	 */
-	void fail(Throwable t, Duration waitTime);
+	JobRetryException retry(Duration waitTime);
 
 	/**
-	 * Fail this job with the given {@link Throwable} and specify a
-	 * time when it should be retried.
+	 * Create an exception that will retry this job after a minimum wait time.
+	 * Will retry indefinitely.
 	 *
+	 * @param waitTime
 	 * @param t
+	 * @return
+	 */
+	JobRetryException retry(Duration waitTime, Throwable t);
+
+	/**
+	 * Create an exception that will retry this job at the given time. May
+	 * fail the job permanently if the {@link When} does not return a scheduled
+	 * time.
+	 *
 	 * @param when
 	 */
-	void fail(Throwable t, When when);
+	JobRetryException retry(When when);
+
+	/**
+	 * Create an exception that will retry this job at the given time. May
+	 * fail the job permanently if the {@link When} does not return a scheduled
+	 * time.
+	 *
+	 * @param when
+	 * @param t
+	 * @return
+	 */
+	JobRetryException retry(When when, Throwable t);
 }
