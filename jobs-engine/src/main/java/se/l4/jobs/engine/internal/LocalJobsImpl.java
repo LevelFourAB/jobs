@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -46,6 +47,8 @@ import se.l4.jobs.engine.backend.BackendJobData;
 import se.l4.jobs.engine.backend.JobCancelEvent;
 import se.l4.jobs.engine.backend.JobCompleteEvent;
 import se.l4.jobs.engine.backend.JobFailureEvent;
+import se.l4.jobs.engine.backend.JobRunnerAvailableEvent;
+import se.l4.jobs.engine.backend.JobRunnerEvent;
 import se.l4.jobs.engine.backend.JobsBackend;
 
 public class LocalJobsImpl
@@ -95,9 +98,23 @@ public class LocalJobsImpl
 			"jobs-executor"
 		);
 
+		List<QualifiedName> names = Flux.fromIterable(runners.entries())
+			.map(entry -> {
+				Serializer<?> serializer = serializers.find(entry.getType())
+					.orElseThrow(() -> new JobException("Type " + entry.getType() + " is not serializable"));
+
+				return serializers.findName(serializer)
+					.orElseThrow(() -> new JobException("Type " + entry.getType() + " has not been given a qualified name"));
+			})
+			.collectList()
+			.block();
+
+		Flux<JobRunnerEvent> runnerEvents = Flux.fromIterable(names)
+			.map(qn -> new JobRunnerAvailableEvent(qn));
+
 		// TODO: Create a flux used to signal what runners are available
 		jobExecutor = new JobExecutor();
-		backend.jobs(Flux.empty())
+		backend.jobs(runnerEvents)
 			.subscribe(jobExecutor);
 	}
 

@@ -1,5 +1,6 @@
 package se.l4.jobs.engine.backend;
 
+import se.l4.commons.serialization.QualifiedName;
 import se.l4.jobs.engine.JobRunner;
 
 /**
@@ -12,21 +13,21 @@ public class JobRunnerAvailableEvent
 	/**
 	 * The id of the runner that is available.
 	 */
-	private final String id;
+	private final QualifiedName name;
 
-	public JobRunnerAvailableEvent(String id)
+	public JobRunnerAvailableEvent(QualifiedName name)
 	{
-		this.id = id;
+		this.name = name;
 	}
 
-	public String getId()
+	public QualifiedName getName()
 	{
-		return id;
+		return name;
 	}
 
 	@Override
 	public String toString()
 	{
-		return getClass().getSimpleName() + "{id=" + id + "}";
+		return getClass().getSimpleName() + "{name=" + name + "}";
 	}
 }
