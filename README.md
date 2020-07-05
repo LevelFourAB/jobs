@@ -1,19 +1,27 @@
 # Jobs
 
-Job runner for Java with support for delays, retries and different backends.
+Reactive job runner for Java with support for delays, retries and different
+backends. Uses [Project Reactor](https://projectreactor.io/) for reactive
+types.
 
 ```java
-LocalJobs jobs = LocalJobs.builder()
-  .setBackend(new InMemoryJobsBackend())
+Mono<LocalJobs> jobs = LocalJobs.builder()
+  .setBackend(InMemoryJobsBackend.create())
   .addRunner(new SendReportRunner())
-  .build();
+  .start();
+
+// Block and wait for the jobs instance to start
+LocalJobs instance = jobs.block();
 
 // Submit a job that will run now
-jobs.add(new SendReport("example@example.org"))
+Mono<Job<SendReport, Void>> job = jobs.add(new SendReport("example@example.org"))
   .submit();
 
+// Wait for the job to be submitted
+job.block();
+
 // Submit a job that will run later
-jobs.add(new SendReport("example@example.org"))
+Mono<Job<SendReport, Void>> job = jobs.add(new SendReport("example@example.org"))
   .withSchedule(Schedule.after(Duration.ofMinutes(20)))
   .submit();
 ```
@@ -46,12 +54,9 @@ possible to cancel a previously submitted repeating job by fetching it and
 calling `cancel`.
 
 ```java
-Optional<Job<?, ?>> job = jobs.getViaId("report-sender");
-
-if(job.isPresent()) {
-  // Cancel the job if it is still scheduled
-  job.get().cancel();
-}
+jobs.getViaId("report-sender")
+  .flatMap(job -> job.cancel())
+  .subscribe();
 ```
 
 ## Job data and runners
@@ -59,7 +64,7 @@ if(job.isPresent()) {
 In this library jobs are represented by data classes that have a job runner
 associated with them.
 
-A data object should be a simple class and in most cases should be serializable:
+A data object should be a simple class that is serializable:
 
 ```java
 import se.l4.commons.serialization.Expose;
@@ -86,7 +91,7 @@ Such a class then has a runner associated with it:
 
 ```java
 public class SendReportRunner implements JobRunner<SendReport, Void> {
-  public void run(JobEncounter<SendReport, Void> encounter) {
+  public Mono<Void> run(JobEncounter<SendReport, Void> encounter) {
     // Code that performs the job goes here    
   }
 }
@@ -106,15 +111,15 @@ public class JobDataWithResult implements JobData<String> {
 }
 ```
 
-A runner can then use `complete` in `JobEncounter` to send back a result:
+The result of the `Mono` will be treated as the result of the job:
 
 ```java
 public class JobDataWithResultRunner implements JobRunner<JobDataWithResult, String> {
-  public run(JobEncounter<JobDataWithResult, String> encounter) {
-    String result = ...;
-      
-    // Indicate that the job has completed
-    encounter.complete(result);
+  public Mono<String> run(JobEncounter<JobDataWithResult> encounter) {
+    return Mono.fromRunnable(() -> {
+      // Simply return a static string in this case
+      return "Result";
+    });
   }
 }
 ```
@@ -124,25 +129,23 @@ When submitting this job you can listen for the result:
 ```java
 // Submit the job
 Job<JobDataWithResult, String> job = jobs.add(new JobDataWithResult(...))
-  .submit();
+  .submit()
+  .block();
 
 /* 
- * Job.result can be used to retrieve a future that will resolve when the
- * job completes or fails completely.
+ * Job.result can be used to listen for the result of the job run.
  */
-CompletableFuture<String> future = job.result();
+Mono<String> resultMono = job.result();
 
-// Use any method on the future, such as join to wait for the result
-String result = future.join();
+// Calling block will block and wait for the result
+String result = future.block();
 ```
 
 ## Managing failures and retries
 
 In many cases it's important to have control over how a job is retried if it
-fails. The default behavior is to retry a job up to 5 times, delaying the
-run with 1 second for the first retry and then doubling the time.
-
-Control over this behavior is done via the methods `fail` and `failNoRetry`:
+fails. Control over this behavior is done by throwing a `JobRetryException` 
+that can be created via the encounter.
 
 ```java
 /* 
@@ -151,25 +154,21 @@ Control over this behavior is done via the methods `fail` and `failNoRetry`:
  */
 private final Delay customDelay = Delay.exponential(Duration.ofMinutes(1));
 
-public run(JobEncounter<Data, Void> encounter) {
-  try {
-    // Perform the job here
-  
-    // Indicate that the job has completed
-    encounter.complete();
-  } catch(Throwable t) {
-    if(encounter.getAttempt() >= 10) {
-      /*
-       * This is the tenth attempt - lets skip retrying it at this point.
-       * The next delay would be 512 minutes (~8.5 hours) and this attempt was
-       * delayed by 256 minutes (~4.2 hours) from the previous attempt.
-       */
-      encounter.failNoRetry(t);
-    } else {
-      // Fail and retry this job later, delaying the run by customDelay
-      encounter.fail(t, customDelay);
-    }
-  }
+public Mono<Void> run(JobEncounter<Data> encounter) {
+  return monoThatDoesJob
+    .onErrorMap(t -> {
+      if(encounter.getAttempt() >= 10) {
+        /*
+         * This is the tenth attempt - lets skip retrying it at this point.
+         * The next delay would be 512 minutes (~8.5 hours) and this attempt 
+         * was delayed by 256 minutes (~4.2 hours) from the previous attempt.
+         */
+        return t;
+      } else {
+        // Fail and retry this job later, delaying the run by customDelay
+        return encounter.retry(customDelay, t);
+      }
+    });
 }
 ```
 
