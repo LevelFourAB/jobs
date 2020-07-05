@@ -3,7 +3,6 @@ package se.l4.jobs.backend.silo;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import reactor.core.publisher.Mono;
@@ -26,7 +25,7 @@ public class SiloJobsBackendTest
 	@Override
 	protected Mono<JobsBackend> createBackend()
 	{
-		return Mono.just(new SiloJobsBackend(silo.structured("jobs:queue")));
+		return SiloJobsBackend.create(silo.structured("jobs:queue"));
 	}
 
 	@Before
@@ -52,19 +51,5 @@ public class SiloJobsBackendTest
 		{
 			silo.close();
 		}
-	}
-
-	@Override
-	@Test
-	public void test1() {
-		// TODO Auto-generated method stub
-		super.test1();
-	}
-
-	@Override
-	@Test
-	public void test8() {
-		// TODO Auto-generated method stub
-		super.test8();
 	}
 }

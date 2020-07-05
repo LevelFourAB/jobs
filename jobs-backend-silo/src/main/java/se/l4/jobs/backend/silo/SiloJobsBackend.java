@@ -75,7 +75,7 @@ public class SiloJobsBackend
 	private final FluxSink<JobTrackingEvent> eventSink;
 	private final Disposable eventDisposable;
 
-	public SiloJobsBackend(StructuredEntity entity)
+	private SiloJobsBackend(StructuredEntity entity)
 	{
 		ids = new SimpleLongIdGenerator();
 
@@ -111,6 +111,17 @@ public class SiloJobsBackend
 			StoredBackendJobData job = first.get();
 			scheduleRun(job.getScheduledTime(), true);
 		}
+	}
+
+	/**
+	 * Create a new backend that stores jobs in the given entity.
+	 *
+	 * @param entity
+	 * @return
+	 */
+	public static Mono<JobsBackend> create(StructuredEntity entity)
+	{
+		return Mono.fromSupplier(() -> new SiloJobsBackend(entity));
 	}
 
 	@Override
