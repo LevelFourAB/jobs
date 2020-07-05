@@ -1,7 +1,9 @@
 package se.l4.jobs.engine;
 
-import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.TimeUnit;
@@ -42,7 +44,7 @@ public class InMemoryJobsBackend
 
 	private final AtomicLong id;
 	private final DelayQueue<DelayedJob> queue;
-	private final Set<Long> queuedOrRunning;
+	private final Map<Long, BackendJobData> jobs;
 
 	private final ConnectableFlux<JobTrackingEvent> events;
 	private final FluxSink<JobTrackingEvent> eventSink;
@@ -54,7 +56,7 @@ public class InMemoryJobsBackend
 
 		id = new AtomicLong(0);
 		queue = new DelayQueue<>();
-		queuedOrRunning = new ConcurrentSkipListSet<>();
+		jobs = new ConcurrentHashMap<>();
 
 		EmitterProcessor<JobTrackingEvent> events = EmitterProcessor.create();
 		eventSink = events.sink(OverflowStrategy.DROP);
@@ -109,7 +111,7 @@ public class InMemoryJobsBackend
 			.map(value -> {
 				BackendJobData withUpdatedId = job.withId(value);
 				queue.add(new DelayedJob(withUpdatedId));
-				queuedOrRunning.add(value);
+				jobs.put(value, withUpdatedId);
 				return withUpdatedId;
 			});
 	}
@@ -118,7 +120,7 @@ public class InMemoryJobsBackend
 	public Flux<JobTrackingEvent> jobEvents(long id)
 	{
 		return Flux.defer(() -> {
-			if(queuedOrRunning.contains(id))
+			if(jobs.containsKey(id))
 			{
 				// If the job is still being processed, listen for future events
 				return this.events
@@ -140,7 +142,7 @@ public class InMemoryJobsBackend
 				if(q.job.getId() == id)
 				{
 					queue.remove(q);
-					queuedOrRunning.remove(id);
+					jobs.remove(id);
 
 					eventSink.next(new JobCancelEvent(id));
 					return;
@@ -149,11 +151,28 @@ public class InMemoryJobsBackend
 		});
 	}
 
+	private void rescheduleOrRemove(long id)
+	{
+		BackendJobData data = jobs.get(id);
+
+		Optional<? extends BackendJobData> nextScheduled = data.withNextScheduledTime();
+		if(nextScheduled.isPresent())
+		{
+			BackendJobData next = nextScheduled.get();
+			jobs.put(next.getId(), next);
+			queue.add(new DelayedJob(next));
+		}
+		else
+		{
+			jobs.remove(id);
+		}
+	}
+
 	@Override
 	public Mono<Void> complete(long id, Bytes bytes)
 	{
 		return Mono.fromRunnable(() -> {
-			queuedOrRunning.remove(id);
+			rescheduleOrRemove(id);
 			eventSink.next(new JobCompleteEvent(id, bytes));
 		});
 	}
@@ -162,13 +181,25 @@ public class InMemoryJobsBackend
 	public Mono<Void> fail(long id, JobException reason)
 	{
 		return Mono.fromRunnable(() -> {
-			queuedOrRunning.remove(id);
+			rescheduleOrRemove(id);
 			eventSink.next(new JobFailureEvent(id, reason));
 		});
 	}
 
 	@Override
-	public Mono<Void> retry(long id, JobRetryException reason)
+	public Mono<Void> retry(long id, Instant when, JobRetryException reason)
+	{
+		return Mono.fromRunnable(() -> {
+			BackendJobData next = jobs.get(id).withRetryAt(when.toEpochMilli());
+			jobs.put(next.getId(), next);
+			queue.add(new DelayedJob(next));
+
+			// TODO: Events?
+		});
+	}
+
+	@Override
+	public Mono<Void> ping(long id)
 	{
 		return Mono.empty();
 	}

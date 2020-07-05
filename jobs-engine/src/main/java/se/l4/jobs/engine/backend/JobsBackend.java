@@ -1,5 +1,8 @@
 package se.l4.jobs.engine.backend;
 
+import java.time.Duration;
+import java.time.Instant;
+
 import org.reactivestreams.Publisher;
 
 import reactor.core.publisher.Flux;
@@ -15,6 +18,12 @@ import se.l4.jobs.engine.JobRetryException;
  */
 public interface JobsBackend
 {
+	/**
+	 * The amount of time a job may run before it should be automatically
+	 * retried.
+	 */
+	static final Duration RETRY_DELAY = Duration.ofMinutes(30);
+
 	/**
 	 * Get a {@link Mono} that will stop this backend.
 	 */
@@ -36,8 +45,13 @@ public interface JobsBackend
 	Flux<BackendJobData> jobs(Publisher<JobRunnerEvent> events);
 
 	/**
-	 * Ask the backend to accept this job. The backend will queue this up and
+	 * Ask the backend to accept a new job. The backend will queue this up and
 	 * can later ask for the job to be run.
+	 *
+	 * <p>
+	 * This method will only be called with jobs that have an
+	 * {@link BackendJobData#getId() id} that is zero. The returned job should
+	 * be updated with a unique identifier.
 	 *
 	 * @param job
 	 */
@@ -74,7 +88,9 @@ public interface JobsBackend
 	Mono<Void> cancel(long id);
 
 	/**
-	 * Indicate that a job has completed successfully.
+	 * Indicate that a job has completed successfully. This should publish
+	 * a {@link JobCompleteEvent} for the job, and requeue it if it's a job
+	 * that runs on a schedule.
 	 *
 	 * @param id
 	 * @param bytes
@@ -92,13 +108,26 @@ public interface JobsBackend
 	Mono<Void> fail(long id, JobException reason);
 
 	/**
-	 * Indicate that a job is going to be retried later.
+	 * Indicate that a job should be retried later. If this is called the
+	 * backend should increase the {@link BackendJobData#getAttempt()} and
+	 * requeue the job.
 	 *
 	 * @param id
+	 * @param when
 	 * @param reason
 	 * @return
 	 */
-	Mono<Void> retry(long id, JobRetryException reason);
+	Mono<Void> retry(long id, Instant when, JobRetryException reason);
+
+	/**
+	 * Ping a job indicating that it is still running. Used for cases where
+	 * a backend supports automatic retries where if a ping is received the
+	 * automatic retry may be delayed.
+	 *
+	 * @param id
+	 * @return
+	 */
+	Mono<Void> ping(long id);
 
 	/**
 	 * Get a job using the {@link BackendJobData#getKnownId()}.

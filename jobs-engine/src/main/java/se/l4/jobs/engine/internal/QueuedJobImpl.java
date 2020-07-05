@@ -51,21 +51,6 @@ public class QueuedJobImpl
 	}
 
 	@Override
-	public BackendJobData withId(long id)
-	{
-		return new QueuedJobImpl(
-			id,
-			knownId,
-			dataName,
-			data,
-			firstScheduledTime,
-			scheduledTime,
-			schedule,
-			attempt
-		);
-	}
-
-	@Override
 	public Optional<String> getKnownId()
 	{
 		return Optional.ofNullable(knownId);
@@ -105,5 +90,65 @@ public class QueuedJobImpl
 	public int getAttempt()
 	{
 		return attempt;
+	}
+
+	@Override
+	public BackendJobData withId(long id)
+	{
+		return new QueuedJobImpl(
+			id,
+			knownId,
+			dataName,
+			data,
+			firstScheduledTime,
+			scheduledTime,
+			schedule,
+			attempt
+		);
+	}
+
+	@Override
+	public BackendJobData withScheduledTime(long time)
+	{
+		return new QueuedJobImpl(
+			id,
+			knownId,
+			dataName,
+			data,
+			firstScheduledTime,
+			time,
+			schedule,
+			attempt
+		);
+	}
+
+	@Override
+	public BackendJobData withNextScheduledTime(long time)
+	{
+		return new QueuedJobImpl(
+			id,
+			knownId,
+			dataName,
+			data,
+			firstScheduledTime,
+			time,
+			schedule,
+			1
+		);
+	}
+
+	@Override
+	public BackendJobData withRetryAt(long time)
+	{
+		return new QueuedJobImpl(
+			id,
+			knownId,
+			dataName,
+			data,
+			firstScheduledTime,
+			time,
+			schedule,
+			attempt + 1
+		);
 	}
 }

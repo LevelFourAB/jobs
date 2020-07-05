@@ -387,17 +387,7 @@ public class LocalJobsImpl
 			}
 
 			// Queue it up with the new timeout
-			return backend.accept(new QueuedJobImpl(
-				backendJob.getId(),
-				backendJob.getKnownId().orElse(null),
-				backendJob.getDataName(),
-				backendJob.getData(),
-				backendJob.getFirstScheduled(),
-				when.toEpochMilli(),
-				backendJob.getSchedule().orElse(null),
-				backendJob.getAttempt() + 1
-			))
-				.flatMap(data -> backend.retry(backendJob.getId(), (JobRetryException) t));
+			return backend.retry(backendJob.getId(), when, (JobRetryException) t);
 		}
 		else
 		{
@@ -448,33 +438,7 @@ public class LocalJobsImpl
 		}
 
 		Bytes bytes = serialize(resultSerializer, result);
-		Mono<Void> reportSuccess = backend.complete(backendJob.getId(), bytes);
-
-		if(encounter.data.getSchedule().isPresent())
-		{
-			/*
-				* If there is a schedule active ask it about the next
-				* execution time.
-				*/
-			OptionalLong nextTime = encounter.data.getSchedule().get().getNextExecution();
-			if(nextTime.isPresent() && nextTime.getAsLong() > System.currentTimeMillis())
-			{
-				return reportSuccess
-					.and(backend.accept(new QueuedJobImpl(
-						backendJob.getId(),
-						backendJob.getKnownId().orElse(null),
-						backendJob.getDataName(),
-						backendJob.getData(),
-						backendJob.getFirstScheduled(),
-						nextTime.getAsLong(),
-						backendJob.getSchedule().orElse(null),
-						1
-					)))
-					.then();
-			}
-		}
-
-		return reportSuccess;
+		return backend.complete(backendJob.getId(), bytes);
 	}
 
 	private class JobExecutor
