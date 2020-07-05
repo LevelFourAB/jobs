@@ -49,7 +49,7 @@ public interface JobRunner<D extends JobData<R>, R>
 	 * @param encounter
 	 * @throws Exception
 	 */
-	Mono<R> run(JobEncounter<D, R> encounter);
+	Mono<R> run(JobEncounter<D> encounter);
 
 	default Optional<Delay> getDelay()
 	{

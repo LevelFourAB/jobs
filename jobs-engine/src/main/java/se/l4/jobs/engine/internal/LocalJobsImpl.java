@@ -333,7 +333,7 @@ public class LocalJobsImpl
 	private Mono<Void> executeJob(BackendJobData job)
 	{
 		return Mono.defer(() -> {
-			JobEncounterImpl<?, ?> encounter = new JobEncounterImpl(job);
+			JobEncounterImpl<?> encounter = new JobEncounterImpl(job);
 
 			Optional<JobRunner<?, ?>> runner = runners.getBest(
 				(Class) encounter.getData().getClass()
@@ -364,7 +364,7 @@ public class LocalJobsImpl
 		});
 	}
 
-	private Mono<Void> handleJobError(JobEncounterImpl<?, ?> encounter, Throwable t)
+	private Mono<Void> handleJobError(JobEncounterImpl<?> encounter, Throwable t)
 	{
 		BackendJobData backendJob = encounter.data;
 		Job<?, ?> job = encounter.job;
@@ -434,7 +434,7 @@ public class LocalJobsImpl
 		}
 	}
 
-	private Mono<Void> handleJobComplete(JobEncounterImpl<?, ?> encounter, Object result)
+	private Mono<Void> handleJobComplete(JobEncounterImpl<?> encounter, Object result)
 	{
 		BackendJobData backendJob = encounter.data;
 		Job<?, ?> job = encounter.job;
@@ -478,8 +478,8 @@ public class LocalJobsImpl
 		}
 	}
 
-	private class JobEncounterImpl<D extends JobData<R>, R>
-		implements JobEncounter<D, R>
+	private class JobEncounterImpl<D extends JobData<?>>
+		implements JobEncounter<D>
 	{
 		private final BackendJobData data;
 		private final Job<?, ?> job;

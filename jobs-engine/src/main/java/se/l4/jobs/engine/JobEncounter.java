@@ -11,7 +11,7 @@ import se.l4.jobs.When;
  *
  * @param <D>
  */
-public interface JobEncounter<D extends JobData<R>, R>
+public interface JobEncounter<D extends JobData<?>>
 {
 	/**
 	 * Get the data of the job.

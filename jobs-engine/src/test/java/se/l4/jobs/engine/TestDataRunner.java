@@ -9,7 +9,7 @@ public class TestDataRunner
 	implements JobRunner<TestData, String>
 {
 	@Override
-	public Mono<String> run(JobEncounter<TestData, String> encounter)
+	public Mono<String> run(JobEncounter<TestData> encounter)
 	{
 		return Mono.delay(Duration.ofMillis(50 + ThreadLocalRandom.current().nextInt(120)))
 			.map(delay -> {
