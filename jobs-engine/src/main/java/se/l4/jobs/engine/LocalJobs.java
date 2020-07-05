@@ -7,6 +7,7 @@ import se.l4.jobs.JobData;
 import se.l4.jobs.Jobs;
 import se.l4.jobs.engine.backend.JobsBackend;
 import se.l4.jobs.engine.internal.LocalJobsBuilderImpl;
+import se.l4.jobs.engine.limits.JobLimiter;
 import se.l4.vibe.Vibe;
 
 /**
@@ -51,6 +52,15 @@ public interface LocalJobs
 	 */
 	interface Builder
 	{
+		/**
+		 * Use a custom limiter to limit the number of jobs that can be active
+		 * at once.
+		 *
+		 * @param limiter
+		 * @return
+		 */
+		Builder withLimiter(JobLimiter limiter);
+
 		/**
 		 * Set the backend used for controlling what jobs are to be run.
 		 *

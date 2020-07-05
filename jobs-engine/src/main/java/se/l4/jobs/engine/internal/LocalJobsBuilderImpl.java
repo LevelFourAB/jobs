@@ -20,6 +20,8 @@ import se.l4.jobs.engine.JobRunner;
 import se.l4.jobs.engine.LocalJobs;
 import se.l4.jobs.engine.LocalJobs.Builder;
 import se.l4.jobs.engine.backend.JobsBackend;
+import se.l4.jobs.engine.limits.JobCounterLimiter;
+import se.l4.jobs.engine.limits.JobLimiter;
 import se.l4.vibe.Vibe;
 
 /**
@@ -33,6 +35,7 @@ public class LocalJobsBuilderImpl
 	private final List<JobListener> listeners;
 
 	private SerializerCollection serializers;
+	private JobLimiter limiter;
 
 	private Mono<JobsBackend> backend;
 	private TypeFinder typeFinder;
@@ -47,6 +50,15 @@ public class LocalJobsBuilderImpl
 		defaultDelay = Delay.limitAttempts(Delay.exponential(1000), 5);
 
 		maxThreads = Runtime.getRuntime().availableProcessors() * 2;
+	}
+
+	@Override
+	public Builder withLimiter(JobLimiter limiter)
+	{
+		Objects.requireNonNull(limiter, "limiter must be specified");
+
+		this.limiter = limiter;
+		return this;
 	}
 
 	@Override
@@ -141,6 +153,7 @@ public class LocalJobsBuilderImpl
 			return backend
 				.map(backend -> new LocalJobsImpl(
 					serializers == null ? new DefaultSerializerCollection() : serializers,
+					limiter == null ? new JobCounterLimiter(maxThreads) : limiter,
 					backend,
 					defaultDelay,
 					listeners.toArray(new JobListener[listeners.size()]),

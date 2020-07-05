@@ -10,11 +10,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import reactor.core.Disposable;
 import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -50,6 +52,7 @@ import se.l4.jobs.engine.backend.JobFailureEvent;
 import se.l4.jobs.engine.backend.JobRunnerAvailableEvent;
 import se.l4.jobs.engine.backend.JobRunnerEvent;
 import se.l4.jobs.engine.backend.JobsBackend;
+import se.l4.jobs.engine.limits.JobLimiter;
 
 public class LocalJobsImpl
 	implements LocalJobs
@@ -58,6 +61,7 @@ public class LocalJobsImpl
 
 	private final SerializerCollection serializers;
 
+	private final JobLimiter limiter;
 	private final JobsBackend backend;
 
 	private final Delay defaultDelay;
@@ -73,6 +77,7 @@ public class LocalJobsImpl
 	public LocalJobsImpl(
 		SerializerCollection serializers,
 
+		JobLimiter limiter,
 		JobsBackend backend,
 
 		Delay defaultDelay,
@@ -84,6 +89,7 @@ public class LocalJobsImpl
 	{
 		this.serializers = serializers;
 
+		this.limiter = limiter;
 		this.backend = backend;
 		this.defaultDelay = defaultDelay;
 		this.listeners = listeners;
@@ -112,7 +118,6 @@ public class LocalJobsImpl
 		Flux<JobRunnerEvent> runnerEvents = Flux.fromIterable(names)
 			.map(qn -> new JobRunnerAvailableEvent(qn));
 
-		// TODO: Create a flux used to signal what runners are available
 		jobExecutor = new JobExecutor();
 		backend.jobs(runnerEvents)
 			.subscribe(jobExecutor);
@@ -358,9 +363,11 @@ public class LocalJobsImpl
 				}
 			}
 
-			return runner.get().run((JobEncounter) encounter)
-				.flatMap(object -> handleJobComplete(encounter, object))
-				.onErrorResume(t -> handleJobError(encounter, (Throwable) t));
+			return limiter.jobStarted(encounter.data)
+				.and(runner.get().run((JobEncounter) encounter)
+					.flatMap(object -> handleJobComplete(encounter, object))
+					.onErrorResume(t -> handleJobError(encounter, (Throwable) t))
+				);
 		});
 	}
 
@@ -404,7 +411,8 @@ public class LocalJobsImpl
 			}
 
 			// Queue it up with the new timeout
-			return backend.retry(backendJob.getId(), when, (JobRetryException) t);
+			return limiter.jobRetry(backendJob, when)
+				.and(backend.retry(backendJob.getId(), when, (JobRetryException) t));
 		}
 		else
 		{
@@ -430,7 +438,8 @@ public class LocalJobsImpl
 			}
 
 			// Report the error to the backend
-			return backend.fail(encounter.data.getId(), JobException.wrap(t));
+			return limiter.jobFailed(backendJob)
+				.and(backend.fail(encounter.data.getId(), JobException.wrap(t)));
 		}
 	}
 
@@ -455,26 +464,53 @@ public class LocalJobsImpl
 		}
 
 		Bytes bytes = serialize(resultSerializer, result);
-		return backend.complete(backendJob.getId(), bytes);
+		return limiter.jobCompleted(backendJob)
+			.and(backend.complete(backendJob.getId(), bytes));
 	}
 
 	private class JobExecutor
 		extends BaseSubscriber<BackendJobData>
 	{
+		private Disposable disposable;
+		private final AtomicLong demand;
+
+		public JobExecutor()
+		{
+			demand = new AtomicLong();
+		}
+
 		@Override
 		protected void hookOnSubscribe(Subscription subscription)
 		{
-			request(1);
+			disposable = limiter.capacity()
+				.subscribe(c -> {
+					if(demand.longValue() < c)
+					{
+						demand.set(c);
+						request(c);
+					}
+				});
+
+			// Perform the initial request
+			long initial = limiter.getInitialCapacity();
+			demand.set(initial);
+			request(initial);
+		}
+
+		@Override
+		protected void hookOnCancel()
+		{
+			disposable.dispose();
 		}
 
 		@Override
 		protected void hookOnNext(BackendJobData value)
 		{
+			demand.decrementAndGet();
+
 			executeJob(value)
 				.subscribeOn(jobScheduler)
 				.subscribe();
-
-			request(1);
 		}
 	}
 
