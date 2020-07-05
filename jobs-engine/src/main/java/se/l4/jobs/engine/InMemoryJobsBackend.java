@@ -91,29 +91,31 @@ public class InMemoryJobsBackend
 	@Override
 	public Mono<BackendJobData> accept(BackendJobData job)
 	{
-		return Mono.defer(() -> {
-			if(job.getId() > 0)
+		return Mono.fromSupplier(() -> {
+			long id = 0;
+			if(job.getKnownId().isPresent())
 			{
-				return Mono.just(job.getId());
+				String stringId = job.getKnownId().get();
+				for(BackendJobData d : jobs.values())
+				{
+					if(d.getKnownId().isPresent() && stringId.equals(d.getKnownId().get()))
+					{
+						id = d.getId();
+						break;
+					}
+				}
 			}
-			else if(job.getKnownId().isPresent())
+
+			if(id == 0)
 			{
-				return getViaId(job.getKnownId().get())
-					.map(data -> data.getId())
-					.defaultIfEmpty(0l);
+				id = this.id.incrementAndGet();
 			}
-			else
-			{
-				return Mono.just(0l);
-			}
-		})
-			.map(id -> id == 0 ? this.id.incrementAndGet() : id)
-			.map(value -> {
-				BackendJobData withUpdatedId = job.withId(value);
-				queue.add(new DelayedJob(withUpdatedId));
-				jobs.put(value, withUpdatedId);
-				return withUpdatedId;
-			});
+
+			BackendJobData withUpdatedId = job.withId(id);
+			queue.add(new DelayedJob(withUpdatedId));
+			jobs.put(id, withUpdatedId);
+			return withUpdatedId;
+		});
 	}
 
 	@Override
@@ -208,11 +210,11 @@ public class InMemoryJobsBackend
 	public Mono<BackendJobData> getViaId(String id)
 	{
 		return Mono.fromSupplier(() -> {
-			for(DelayedJob q : queue)
+			for(BackendJobData d : jobs.values())
 			{
-				if(q.job.getKnownId().isPresent() && id.equals(q.job.getKnownId().get()))
+				if(d.getKnownId().isPresent() && id.equals(d.getKnownId().get()))
 				{
-					return q.job;
+					return d;
 				}
 			}
 
