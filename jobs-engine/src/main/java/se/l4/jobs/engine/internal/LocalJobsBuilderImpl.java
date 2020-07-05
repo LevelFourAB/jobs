@@ -44,7 +44,7 @@ public class LocalJobsBuilderImpl
 	{
 		listeners = new ArrayList<>();
 		runners = new ClassMatchingHashMap<>();
-		defaultDelay = Delay.exponential(1000);
+		defaultDelay = Delay.limitAttempts(Delay.exponential(1000), 5);
 
 		maxThreads = Runtime.getRuntime().availableProcessors() * 2;
 	}
