@@ -3,10 +3,10 @@ package se.l4.jobs.engine.internal;
 import se.l4.jobs.Job;
 import se.l4.jobs.engine.JobListener;
 import se.l4.vibe.Vibe;
-import se.l4.vibe.percentile.CombinedProbes;
-import se.l4.vibe.percentile.CombinedProbes.CombinedData;
+import se.l4.vibe.operations.Change;
 import se.l4.vibe.probes.CountingProbe;
 import se.l4.vibe.probes.SampledProbe;
+import se.l4.vibe.snapshots.MapSnapshot;
 
 /**
  * Listener that will report metrics into a {@link Vibe} instance.
@@ -28,17 +28,17 @@ public class VibeListener
 		retryProbe = new CountingProbe();
 		failedProbe = new CountingProbe();
 
-		SampledProbe<CombinedData<Long>> probe = CombinedProbes.<Long>builder()
-			.add("scheduled", scheduledProbe)
-			.add("started", startedProbe)
-			.add("completed", completedProbe)
-			.add("failed", failedProbe)
-			.add("scheduledRetry", retryProbe)
-			.create();
+		SampledProbe<MapSnapshot> probe = SampledProbe.merged()
+			.add("scheduled", scheduledProbe.apply(Change.changeAsLong()))
+			.add("started", startedProbe.apply(Change.changeAsLong()))
+			.add("completed", completedProbe.apply(Change.changeAsLong()))
+			.add("failed", failedProbe.apply(Change.changeAsLong()))
+			.add("scheduledRetry", retryProbe.apply(Change.changeAsLong()))
+			.build();
 
-		vibe.sample(probe)
+		vibe.export(probe)
 			.at("queue")
-			.export();
+			.done();
 	}
 
 	@Override
