@@ -9,6 +9,9 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import se.l4.commons.id.LongIdGenerator;
 import se.l4.commons.id.SimpleLongIdGenerator;
 import se.l4.jobs.JobCancelledException;
@@ -43,6 +46,8 @@ import se.l4.silo.structured.StructuredEntity;
 public class SiloJobsBackend
 	implements JobsBackend
 {
+	private static final Logger log = LoggerFactory.getLogger(SiloJobsBackend.class);
+
 	private final ObjectEntity<StoredJob> entity;
 	private final LongIdGenerator ids;
 
@@ -96,7 +101,8 @@ public class SiloJobsBackend
 			Optional<StoredJob> first = fr.first();
 			if(! first.isPresent())
 			{
-				// If there are no jobs queued do nothing
+				// If there are no jobs queued, schedule check in 5 minutes
+				scheduleRun(System.currentTimeMillis() + 300000, false);
 				return;
 			}
 
@@ -165,6 +171,10 @@ public class SiloJobsBackend
 		timestampLock.lock();
 		try
 		{
+			long now = System.currentTimeMillis();
+			long delay = Math.max(0, timestamp - now);
+			timestamp = now + delay;
+
 			if(future != null)
 			{
 				if(! ignoreClosest && timestamp > closestTimestamp)
@@ -180,10 +190,10 @@ public class SiloJobsBackend
 				future.cancel(false);
 			}
 
-			long delay = timestamp - System.currentTimeMillis();
+			log.debug("Scheduling running of jobs in {} ms", delay);
 
-			closestTimestamp = timestamp;
-			future = executor.schedule(() -> runJobs(control), Math.max(0, delay), TimeUnit.MILLISECONDS);
+			closestTimestamp = now + delay;
+			future = executor.schedule(() -> runJobs(control), delay, TimeUnit.MILLISECONDS);
 		}
 		finally
 		{
@@ -193,7 +203,21 @@ public class SiloJobsBackend
 
 	private void runJobs(JobControl control)
 	{
-		long lastHandled = 0;
+		timestampLock.lock();
+		try
+		{
+			long now = System.currentTimeMillis();
+			if(closestTimestamp <= now)
+			{
+				future = null;
+				closestTimestamp = now;
+			}
+		}
+		finally
+		{
+			timestampLock.unlock();
+		}
+
 		while(true)
 		{
 			try(FetchResult<StoredJob> fr = entity.query("sortedByTime", IndexQuery.type())
@@ -201,6 +225,8 @@ public class SiloJobsBackend
 				.limit(10)
 				.run())
 			{
+				log.debug("Checking {} jobs if they should be run", fr.getSize());
+
 				if(fr.isEmpty())
 				{
 					// No more jobs in the queue, stop the processing
@@ -224,7 +250,6 @@ public class SiloJobsBackend
 					else
 					{
 						// TODO: This should auto-schedule the job for later just in case
-						lastHandled = job.getScheduledTime();
 
 						// Delete the job
 						entity.deleteViaId(job.getId());
@@ -255,19 +280,8 @@ public class SiloJobsBackend
 			}
 		}
 
-		// No more jobs in the queue, skip scheduling a new run
-		timestampLock.lock();
-		try
-		{
-			if(lastHandled == 0 || closestTimestamp <= lastHandled)
-			{
-				future = null;
-			}
-		}
-		finally
-		{
-			timestampLock.unlock();
-		}
+		// No more jobs in the queue, attempt to schedule a full run in 5 minutes
+		scheduleRun(System.currentTimeMillis() + 300000, false);
 	}
 
 	public static SiloBuilder defineJobEntity(SiloBuilder builder, String name)
